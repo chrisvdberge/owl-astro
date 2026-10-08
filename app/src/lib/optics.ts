@@ -46,7 +46,32 @@ export const PRESETS: Preset[] = [
 /** Bare cameras: choosing one fills in the sensor of the current optics (focal length and aperture come from your lens or scope). */
 export interface Camera { id: string; label: string; sensorWmm: number; sensorHmm: number; pixelUm: number }
 export const CAMERAS: Camera[] = [
+  { id: 'zwo-asi533mc', label: 'ZWO ASI533MC Pro (1″, 3008²)', sensorWmm: 11.31, sensorHmm: 11.31, pixelUm: 3.76 },
+  { id: 'zwo-asi585mc', label: 'ZWO ASI585MC (1/1.2″, 3840×2160)', sensorWmm: 11.14, sensorHmm: 6.26, pixelUm: 2.9 },
+  { id: 'zwo-asi294mc', label: 'ZWO ASI294MC Pro (4/3″)', sensorWmm: 19.1, sensorHmm: 13, pixelUm: 4.63 },
+  { id: 'zwo-asi2600', label: 'ZWO ASI2600MC/MM Pro (APS-C)', sensorWmm: 23.5, sensorHmm: 15.7, pixelUm: 3.76 },
+  { id: 'zwo-asi183', label: 'ZWO ASI183MC/MM Pro (1″)', sensorWmm: 13.2, sensorHmm: 8.8, pixelUm: 2.4 },
+  { id: 'canon-aps-c', label: 'Canon APS-C DSLR (600D/700D/…)', sensorWmm: 22.3, sensorHmm: 14.9, pixelUm: 4.3 },
+  { id: 'canon-6d', label: 'Canon EOS 6D (full frame)', sensorWmm: 35.8, sensorHmm: 23.9, pixelUm: 6.54 },
+  { id: 'sony-a7iii', label: 'Sony A7 III (full frame)', sensorWmm: 35.6, sensorHmm: 23.8, pixelUm: 5.9 },
   { id: 'nikon-d600', label: 'Nikon D600 (full frame)', sensorWmm: 35.9, sensorHmm: 24, pixelUm: 5.95 }, // 6016 x 4016
+]
+
+/** Common imaging scopes and lenses: choosing one fills in aperture and focal length (nominal, no reducer). */
+export interface Scope { id: string; label: string; apertureMm: number; focalLengthMm: number }
+export const SCOPES: Scope[] = [
+  { id: 'wo-redcat51', label: 'William Optics RedCat 51 (250 mm f/4.9)', apertureMm: 51, focalLengthMm: 250 },
+  { id: 'askar-fra400', label: 'Askar FRA400 (400 mm f/5.6)', apertureMm: 72, focalLengthMm: 400 },
+  { id: 'sw-evostar72ed', label: 'Sky-Watcher Evostar 72ED (420 mm f/5.8)', apertureMm: 72, focalLengthMm: 420 },
+  { id: 'sw-evostar80ed', label: 'Sky-Watcher Evostar 80ED (600 mm f/7.5)', apertureMm: 80, focalLengthMm: 600 },
+  { id: 'sw-esprit100ed', label: 'Sky-Watcher Esprit 100ED (550 mm f/5.5)', apertureMm: 100, focalLengthMm: 550 },
+  { id: 'tak-fsq106', label: 'Takahashi FSQ-106EDX4 (530 mm f/5)', apertureMm: 106, focalLengthMm: 530 },
+  { id: 'sw-130pds', label: 'Sky-Watcher 130PDS (650 mm f/5)', apertureMm: 130, focalLengthMm: 650 },
+  { id: 'celestron-rasa8', label: 'Celestron RASA 8 (400 mm f/2)', apertureMm: 203, focalLengthMm: 400 },
+  { id: 'celestron-edge8', label: 'Celestron EdgeHD 8 (2032 mm f/10)', apertureMm: 203, focalLengthMm: 2032 },
+  { id: 'lens-24', label: 'Lens 24 mm f/1.4', apertureMm: 17.1, focalLengthMm: 24 },
+  { id: 'lens-135', label: 'Lens 135 mm f/2', apertureMm: 67.5, focalLengthMm: 135 },
+  { id: 'lens-200', label: 'Lens 200 mm f/2.8', apertureMm: 71.4, focalLengthMm: 200 },
 ]
 
 const RAD = 180 / Math.PI

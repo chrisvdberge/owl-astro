@@ -4,8 +4,9 @@ import type { Location } from './astro'
 import { DEFAULT_SETTINGS, type MoonTolerance, type Settings } from './suitability'
 
 export type Status = 'wishlist' | 'progress' | 'done'
+export interface Framing { rotation: number; cols: number; rows: number; survey: string }
 export interface Session { id: string; date: string; hours: number; note: string }
-export interface WishItem { id: string; status: Status; goalHours?: number; notes: string; moon?: MoonTolerance; added: string; sessions?: Session[] }
+export interface WishItem { id: string; status: Status; goalHours?: number; notes: string; moon?: MoonTolerance; added: string; sessions?: Session[]; framing?: Framing }
 
 // Persistence goes through this small interface so a Supabase implementation can replace localStorage later.
 interface State { locations: Location[]; activeId: string; wishlist: WishItem[]; settings: Settings }

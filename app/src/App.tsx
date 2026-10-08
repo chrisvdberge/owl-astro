@@ -30,7 +30,6 @@ export default function App() {
   const [presetId, setPresetId] = useState('seestar-s50-pro')
   const [optics, setOptics] = useState<Optics>(PRESETS[0].optics)
   const [rotation, setRotation] = useState(0)
-  const [seeing, setSeeing] = useState(3)
   const [survey, setSurvey] = useState('dss2')
   const [overlayId, setOverlayId] = useState('none')
   const [opacity, setOpacity] = useState(0.4)
@@ -46,6 +45,8 @@ export default function App() {
   const [hzOpen, setHzOpen] = useState(false)
   const [panel, setPanel] = useState<'left' | 'right' | null>(null)
 
+  const seeing = loc.seeing ?? 3
+  const wish = target.obj ? store.wishlist.find((w) => w.id === target.obj!.id) : undefined
   const res = useMemo(() => compute(optics, seeing), [optics, seeing])
   const fit = target.obj ? framingFit(target.obj.maj, target.obj.min, res.fovW, res.fovH) : null
   const hits = useMemo(() => searchCatalog(catalog, query, 12, catFilter), [catalog, query, catFilter])
@@ -107,11 +108,24 @@ export default function App() {
     for (const corners of mosaicPanels(target.ra, target.dec, res.fovW, res.fovH, rotation, mosaic.cols, mosaic.rows)) overlay.current.add(A.polygon(corners))
   }, [ready, target, res.fovW, res.fovH, rotation, mosaic])
 
+  // framing of a wishlisted target (rotation, mosaic, survey) is remembered on the target
+  useEffect(() => {
+    if (!wish) return
+    const f = wish.framing
+    if (f && f.rotation === rotation && f.cols === mosaic.cols && f.rows === mosaic.rows && f.survey === survey) return
+    store.patchWish(wish.id, { framing: { rotation, cols: mosaic.cols, rows: mosaic.rows, survey } })
+  }, [wish?.id, rotation, mosaic.cols, mosaic.rows, survey]) // eslint-disable-line react-hooks/exhaustive-deps
+
   function goTo(t: typeof target, zoom = true) {
     setTarget(t)
-    const f = t.obj ? framingFit(t.obj.maj, t.obj.min, res.fovW, res.fovH) : null
-    setMosaic(f?.kind === 'mosaic' ? { cols: f.cols, rows: f.rows } : { cols: 1, rows: 1 })
-    if (t.obj) setSurvey(defaultSurvey(t.obj))
+    const saved = t.obj ? store.wishlist.find((w) => w.id === t.obj!.id)?.framing : undefined
+    if (saved) {
+      setRotation(saved.rotation); setMosaic({ cols: saved.cols, rows: saved.rows }); setSurvey(saved.survey)
+    } else {
+      const f = t.obj ? framingFit(t.obj.maj, t.obj.min, res.fovW, res.fovH) : null
+      setMosaic(f?.kind === 'mosaic' ? { cols: f.cols, rows: f.rows } : { cols: 1, rows: 1 })
+      if (t.obj) { setSurvey(defaultSurvey(t.obj)); setRotation(0) }
+    }
     aladin.current?.gotoRaDec(t.ra, t.dec)
     if (zoom) {
       const size = Math.max(res.fovW * 1.4, t.obj?.maj ? (t.obj.maj / 60) * 1.6 : 0)
@@ -230,7 +244,7 @@ export default function App() {
           <dt>Dawes limit</dt><dd>{res.dawes.toFixed(2)} ″</dd>
         </dl>
         <label className="f"><span>Typical seeing</span>
-          <select value={seeing} onChange={(e) => setSeeing(+e.target.value)}>{SEEING.map((s) => <option key={s.v} value={s.v}>{s.l}</option>)}</select>
+          <select value={seeing} onChange={(e) => patchLoc({ seeing: +e.target.value })}>{SEEING.map((s) => <option key={s.v} value={s.v}>{s.l}</option>)}</select>
         </label>
         <p className={`badge ${res.sampling}`}>
           {res.sampling === 'ok' ? 'Well sampled' : res.sampling === 'under' ? 'Undersampled' : 'Oversampled'}

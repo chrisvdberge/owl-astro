@@ -113,6 +113,15 @@ export function bestPeriods(results: NightResult[], threshold = 50): string {
     if (last && w.start.getTime() - last[1].getTime() < 21 * DAY_MS) last[1] = end
     else ranges.push([w.start, end])
   }
+  // the year is a circle: a season running past the end of the window continues at its start
+  if (ranges.length > 1) {
+    const first = ranges[0], last = ranges[ranges.length - 1]
+    const windowEnd = wk[wk.length - 1].start.getTime() + 6 * DAY_MS
+    if (first[0].getTime() === wk[0].start.getTime() && windowEnd - last[1].getTime() < 21 * DAY_MS) {
+      first[0] = last[0]
+      ranges.pop()
+    }
+  }
   if (!ranges.length) return 'No suitable period in the next year'
   const f = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
   return ranges.map(([a, b]) => `${f(a)} – ${f(b)}`).join(', ')

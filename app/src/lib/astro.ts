@@ -9,6 +9,7 @@ export interface Location {
   lon: number // degrees east
   elevation: number
   horizon: HorizonPoint[] // sorted by azimuth; empty = flat horizon
+  seeing?: number // typical seeing in arcsec at this site (default 3)
 }
 
 /** Gaps wider than this between two points are open sky: the horizon ramps down to 0° beside each point. */

@@ -16,8 +16,8 @@ export type Op =
   | { table: 'locations' | 'wishlist' | 'sessions'; kind: 'delete'; id: string }
   | { table: 'settings'; kind: 'upsert'; id: 'settings'; row: Record<string, unknown> }
 
-const locRow = (l: Location) => ({ id: l.id, name: l.name, lat: l.lat, lon: l.lon, elevation: l.elevation, horizon: l.horizon })
-const wishRow = (w: WishItem) => ({ id: w.id, status: w.status, goal_hours: w.goalHours ?? null, notes: w.notes, moon: w.moon ?? null, added: w.added })
+const locRow = (l: Location) => ({ id: l.id, name: l.name, lat: l.lat, lon: l.lon, elevation: l.elevation, horizon: l.horizon, seeing: l.seeing ?? 3 })
+const wishRow = (w: WishItem) => ({ id: w.id, status: w.status, goal_hours: w.goalHours ?? null, notes: w.notes, moon: w.moon ?? null, added: w.added, framing: w.framing ?? null })
 const sesRow = (w: string, s: Session) => ({ id: s.id, wish_id: w, date: s.date, hours: s.hours, note: s.note })
 const setRow = (d: Data) => ({ min_alt: d.settings.minAlt, min_hours: d.settings.minHours, active_id: d.activeId })
 
@@ -56,12 +56,12 @@ export async function pull(db: SupabaseClient, fallback: Settings): Promise<Data
   if (!l.data?.length && !w.data?.length) return null
   const sessions = new Map<string, Session[]>()
   for (const r of s.data ?? []) sessions.set(r.wish_id, [...(sessions.get(r.wish_id) ?? []), { id: r.id, date: r.date, hours: r.hours, note: r.note }])
-  const locations: Location[] = (l.data ?? []).map((r) => ({ id: r.id, name: r.name, lat: r.lat, lon: r.lon, elevation: r.elevation, horizon: r.horizon ?? [] }))
+  const locations: Location[] = (l.data ?? []).map((r) => ({ id: r.id, name: r.name, lat: r.lat, lon: r.lon, elevation: r.elevation, horizon: r.horizon ?? [], seeing: r.seeing ?? 3 }))
   return {
     locations,
     activeId: st.data?.active_id && locations.some((x) => x.id === st.data.active_id) ? st.data.active_id : locations[0]?.id ?? '',
     wishlist: (w.data ?? []).map((r) => ({
-      id: r.id, status: r.status, goalHours: r.goal_hours ?? undefined, notes: r.notes, moon: r.moon ?? undefined, added: r.added,
+      id: r.id, status: r.status, goalHours: r.goal_hours ?? undefined, notes: r.notes, moon: r.moon ?? undefined, added: r.added, framing: r.framing ?? undefined,
       sessions: sessions.get(r.id) ?? [],
     })),
     settings: { minAlt: st.data?.min_alt ?? fallback.minAlt, minHours: st.data?.min_hours ?? fallback.minHours },

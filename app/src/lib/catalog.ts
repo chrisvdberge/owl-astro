@@ -6,6 +6,17 @@ export interface CatObject {
   names: string[]; alt: string[]
 }
 
+/** A user-named field that is not a catalog object (a frame on a star field, a Milky Way patch…). */
+export interface CustomTarget { name: string; ra: number; dec: number; con: string }
+
+export const isCustom = (id: string) => id.startsWith('custom:')
+
+/** Catalog-shaped stand-in so custom fields flow through the planner and sky view like any object. */
+export const customObject = (id: string, c: CustomTarget): CatObject => ({
+  id, m: null, type: 'Other', typeName: 'Custom field', ra: c.ra, dec: c.dec, con: c.con,
+  maj: null, min: null, pa: null, mag: null, sb: null, names: [c.name], alt: [],
+})
+
 export async function loadCatalog(): Promise<CatObject[]> {
   const res = await fetch('/catalog.json')
   return res.json()

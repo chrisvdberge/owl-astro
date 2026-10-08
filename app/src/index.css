@@ -82,3 +82,13 @@ button:disabled { opacity: .4; cursor: default; }
 .acct { margin-left: auto; font-size: 12.5px; } .acct.synced { color: var(--ok); } .acct.syncing { color: var(--warn); } .acct.error { color: var(--bad); }
 header .tabs { margin-left: auto; } .acct + .tabs { margin-left: 0; }
 .ctag { float: right; font-style: normal; font-size: 10.5px; color: var(--mute); border: 1px solid var(--line); border-radius: 8px; padding: 0 6px; margin-top: 2px; }
+
+/* saved framing: snapshot + sky right-click menu */
+.thumb { display: block; width: 100%; border-radius: 6px; border: 1px solid var(--line); margin-top: 8px; } .thumb.sm { width: 96px; margin: 0; cursor: pointer; }
+.ctx { position: fixed; z-index: 41; display: grid; gap: 4px; min-width: 240px; padding: 8px; background: var(--panel); border: 1px solid var(--acc); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+.ctx small { color: var(--mute); padding: 0 2px 4px; } .ctx button { text-align: left; }
+.ctxbg { position: fixed; inset: 0; z-index: 40; }
+.toast { position: fixed; z-index: 60; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--ok); color: var(--ok); border-radius: 8px; padding: 8px 14px; }
+
+.fri { margin-top: 8px; } .fri .row { margin-top: 4px; align-items: center; } .fri .thumb { cursor: pointer; margin-top: 0; }
+.frs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; } .frs figure { margin: 0; cursor: pointer; } .frs figcaption { font-size: 11px; color: var(--mute); }

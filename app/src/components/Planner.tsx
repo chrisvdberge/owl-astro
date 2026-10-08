@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { CatObject } from '../lib/catalog'
+import { customObject, isCustom, type CatObject } from '../lib/catalog'
 import type { useStore } from '../lib/store'
 import { tzOf, todayIn } from '../lib/tz'
 import { cloudAt, meanCloud, useCloud, type Cloud } from '../lib/weather'
@@ -13,10 +13,10 @@ const scoreColor = (s: number) => {
   const t = Math.min(1, Math.max(0, (s - 25) / 70))
   return `hsl(${Math.round(t * 135)} 65% ${30 + t * 8}%)`
 }
-const label = (o: CatObject) => (o.m ? `${o.m} · ${o.id}` : o.id)
+const label = (o: CatObject) => (isCustom(o.id) ? o.names[0] : o.m ? `${o.m} · ${o.id}` : o.id)
 const fmt = (d: Date) => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
 
-export default function Planner({ store, catalog, onShow }: { store: Store; catalog: CatObject[]; onShow: (o: CatObject) => void }) {
+export default function Planner({ store, catalog, onShow }: { store: Store; catalog: CatObject[]; onShow: (o: CatObject, fid?: string) => void }) {
   const [tab, setTab] = useState<'wishlist' | 'calendar'>('calendar')
   const [nights, setNights] = useState<EphemNight[] | null>(null)
   const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1) })
@@ -38,7 +38,7 @@ export default function Planner({ store, catalog, onShow }: { store: Store; cata
   }, [loc.lat, loc.lon, loc.elevation, tz]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const items = useMemo(
-    () => wishlist.map((w) => ({ w, o: byId.get(w.id) })).filter((x): x is { w: typeof x.w; o: CatObject } => !!x.o),
+    () => wishlist.map((w) => ({ w, o: byId.get(w.id) ?? (w.custom ? customObject(w.id, w.custom) : undefined) })).filter((x): x is { w: typeof x.w; o: CatObject } => !!x.o),
     [wishlist, byId],
   )
 
@@ -97,6 +97,11 @@ export default function Planner({ store, catalog, onShow }: { store: Store; cata
               <label className="f inl"><span>Goal h</span>
                 <input type="number" min={0} step="0.5" value={w.goalHours ?? ''} placeholder="—" onChange={(e) => store.patchWish(w.id, { goalHours: e.target.value ? +e.target.value : undefined })} /></label>
             </div>
+            {!!w.framings?.length && (
+              <div className="frs">{w.framings.map((f) => f.thumb
+                ? <figure key={f.id} onClick={() => onShow(o, f.id)} title="Open this framing on the sky"><img className="thumb sm" src={f.thumb} alt={f.name} /><figcaption>{f.name}</figcaption></figure>
+                : <button key={f.id} className="lnk" onClick={() => onShow(o, f.id)}>{f.name}</button>)}</div>
+            )}
             <input className="notes" placeholder="Notes" value={w.notes} onChange={(e) => store.patchWish(w.id, { notes: e.target.value })} />
             <Sessions w={w} store={store} />
           </div>

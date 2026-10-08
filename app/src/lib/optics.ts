@@ -19,6 +19,18 @@ export const PRESETS: Preset[] = [
     optics: { apertureMm: 50, focalLengthMm: 260, sensorWmm: 11.136, sensorHmm: 6.264, pixelUm: 2.9, binning: 1, drizzle: 1, reducer: 1 },
   },
   {
+    id: 'seestar-s50',
+    label: 'Seestar S50',
+    // Sony IMX462 1920x1080 @ 2.9 µm (5.568 x 3.132 mm), 250 mm f/5, 50 mm aperture
+    optics: { apertureMm: 50, focalLengthMm: 250, sensorWmm: 5.568, sensorHmm: 3.132, pixelUm: 2.9, binning: 1, drizzle: 1, reducer: 1 },
+  },
+  {
+    id: 'seestar-s30-pro',
+    label: 'Seestar S30 Pro',
+    // Sony IMX585 3840x2160 @ 2.9 µm (11.136 x 6.264 mm), 160 mm f/5.3, 30 mm aperture
+    optics: { apertureMm: 30, focalLengthMm: 160, sensorWmm: 11.136, sensorHmm: 6.264, pixelUm: 2.9, binning: 1, drizzle: 1, reducer: 1 },
+  },
+  {
     id: 'dwarf-mini',
     label: 'Dwarf Mini (telephoto)',
     // Sony IMX662 1920x1080 @ 2.9 µm (5.568 x 3.132 mm), 150 mm f/5, 30 mm aperture
@@ -29,6 +41,12 @@ export const PRESETS: Preset[] = [
     label: 'Custom',
     optics: { apertureMm: 100, focalLengthMm: 550, sensorWmm: 23.5, sensorHmm: 15.7, pixelUm: 3.76, binning: 1, drizzle: 1, reducer: 1 },
   },
+]
+
+/** Bare cameras: choosing one fills in the sensor of the current optics (focal length and aperture come from your lens or scope). */
+export interface Camera { id: string; label: string; sensorWmm: number; sensorHmm: number; pixelUm: number }
+export const CAMERAS: Camera[] = [
+  { id: 'nikon-d600', label: 'Nikon D600 (full frame)', sensorWmm: 35.9, sensorHmm: 24, pixelUm: 5.95 }, // 6016 x 4016
 ]
 
 const RAD = 180 / Math.PI

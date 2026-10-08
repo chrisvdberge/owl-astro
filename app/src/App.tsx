@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import A from 'aladin-lite'
 import { CATALOGS, catalogTag, customObject, isCustom, loadCatalog, searchCatalog, sexa, type CatObject, type CustomTarget } from './lib/catalog'
-import { PRESETS, compute, framingFit, mosaicPanels, rectCorners, sessionCrop, type Optics } from './lib/optics'
+import { CAMERAS, PRESETS, compute, framingFit, mosaicPanels, rectCorners, sessionCrop, type Optics } from './lib/optics'
 import { scopeName } from './components/FramingPreview'
 import { SURVEYS, defaultSurvey } from './lib/surveys'
 import * as Astronomy from 'astronomy-engine'
@@ -430,6 +430,11 @@ export default function App() {
         <label className="f"><span>Preset</span>
           <select value={presetId} onChange={(e) => { setPresetId(e.target.value); setOptics(PRESETS.find((p) => p.id === e.target.value)!.optics) }}>
             {PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+          </select>
+        </label>
+        <label className="f"><span>Camera</span>
+          <select value="" onChange={(e) => { const c = CAMERAS.find((x) => x.id === e.target.value); if (c) { setPresetId('custom'); setOptics({ ...optics, sensorWmm: c.sensorWmm, sensorHmm: c.sensorHmm, pixelUm: c.pixelUm }) } }}>
+            <option value="">Set sensor from…</option>{CAMERAS.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
           </select>
         </label>
         {num('apertureMm', 'Aperture mm')}{num('focalLengthMm', 'Focal length mm')}

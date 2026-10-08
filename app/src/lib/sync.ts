@@ -17,10 +17,10 @@ export type Op =
   | { table: 'settings'; kind: 'upsert'; id: 'settings'; row: Record<string, unknown> }
 
 const locRow = (l: Location) => ({ id: l.id, name: l.name, lat: l.lat, lon: l.lon, elevation: l.elevation, horizon: l.horizon, seeing: l.seeing ?? 3, tz: l.tz ?? null })
-const wishRow = (w: WishItem) => ({ id: w.id, status: w.status, goal_hours: w.goalHours ?? null, notes: w.notes, moon: w.moon ?? null, added: w.added, custom: w.custom ?? null })
+const wishRow = (w: WishItem) => ({ id: w.id, status: w.status, goal_hours: w.goalHours ?? null, notes: w.notes, moon: w.moon ?? null, added: w.added, custom: w.custom ?? null, ...(w.priority ? { priority: w.priority } : {}) })
 const framRow = (w: string, f: Framing) => { const { id, name, created, thumb, ...data } = f; return { id, wish_id: w, name, created, thumb: thumb ?? null, data } }
 const sesRow = (w: string, s: Session) => ({ id: s.id, wish_id: w, date: s.date, hours: s.hours, note: s.note })
-const setRow = (d: Data) => ({ min_alt: d.settings.minAlt, min_hours: d.settings.minHours, active_id: d.activeId })
+const setRow = (d: Data) => ({ min_alt: d.settings.minAlt, min_hours: d.settings.minHours, active_id: d.activeId, ...(d.settings.scope ? { scope: d.settings.scope } : {}) })
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
@@ -67,11 +67,11 @@ export async function pull(db: SupabaseClient, fallback: Settings): Promise<Data
     activeId: st.data?.active_id && locations.some((x) => x.id === st.data.active_id) ? st.data.active_id : locations[0]?.id ?? '',
     // rows saved before the framings table existed still carry one framing + thumb: upgradeWish folds them in
     wishlist: (w.data ?? []).map((r) => upgradeWish({
-      id: r.id, status: r.status, goalHours: r.goal_hours ?? undefined, notes: r.notes, moon: r.moon ?? undefined, added: r.added, custom: r.custom ?? undefined,
+      id: r.id, status: r.status, goalHours: r.goal_hours ?? undefined, notes: r.notes, moon: r.moon ?? undefined, priority: r.priority ?? undefined, added: r.added, custom: r.custom ?? undefined,
       framing: r.framing ?? undefined, thumb: r.thumb ?? undefined,
       sessions: sessions.get(r.id) ?? [], framings: framings.get(r.id),
     })),
-    settings: { minAlt: st.data?.min_alt ?? fallback.minAlt, minHours: st.data?.min_hours ?? fallback.minHours },
+    settings: { minAlt: st.data?.min_alt ?? fallback.minAlt, minHours: st.data?.min_hours ?? fallback.minHours, scope: st.data?.scope ?? undefined },
   }
 }
 

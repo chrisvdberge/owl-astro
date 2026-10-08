@@ -19,17 +19,17 @@ function links(o: CatObject) {
 }
 
 /** Facts, search links and example images for a catalog object (or custom field). `lazy` waits for `open` before fetching images. */
-export default function TargetInfo({ o, open = true }: { o: CatObject; open?: boolean }) {
+export default function TargetInfo({ o, open = true, compact = false }: { o: CatObject; open?: boolean; compact?: boolean }) {
   const { images, loading, error } = useImages(o, open)
   const [view, setView] = useState<Img | null>(null)
   const aka = [o.m, ...o.names.slice(1), ...o.alt].filter((x): x is string => !!x && x !== o.id).slice(0, 6)
   return (
     <div className="info">
-      <p className="note">
+      {!compact && <p className="note">
         {o.typeName}{o.names[0] && !isCustom(o.id) ? ` · ${o.names[0]}` : ''}{!isCustom(o.id) && ` · ${catalogTag(o)}`} · {o.con}
         {o.mag != null && ` · mag ${o.mag}`}{o.maj ? ` · ${o.maj}′${o.min ? ` × ${o.min}′` : ''}` : ''}{o.sb != null && ` · ${o.sb} mag/arcsec²`}
         {aka.length > 0 && <><br />Also: {aka.join(', ')}</>}
-      </p>
+      </p>}
       <div className="chips">{links(o).map((l) => <a key={l.label} className="chip" href={l.href} target="_blank" rel="noreferrer">{l.label} ↗</a>)}</div>
       {!isCustom(o.id) && (
         <>

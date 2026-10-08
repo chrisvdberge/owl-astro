@@ -6,6 +6,7 @@ import type { CustomTarget } from './catalog'
 import { DEFAULT_SETTINGS, type MoonTolerance, type Settings } from './suitability'
 
 export type Status = 'wishlist' | 'progress' | 'done'
+export type Priority = 'high' | 'medium' | 'low'
 /** Exact framing: frame centre, sky-view position/zoom and the optics it was made with (all optional for older saves). */
 export interface FrameData {
   rotation: number; cols: number; rows: number; survey: string
@@ -18,7 +19,7 @@ export interface FrameData {
 /** A saved framing of a target; a target can have several (wide field, close crop, mosaic…). */
 export interface Framing extends FrameData { id: string; name: string; created: string; thumb?: string }
 export interface Session { id: string; date: string; hours: number; note: string }
-export interface WishItem { id: string; status: Status; goalHours?: number; notes: string; moon?: MoonTolerance; added: string; sessions?: Session[]; framings?: Framing[]; custom?: CustomTarget }
+export interface WishItem { id: string; status: Status; goalHours?: number; notes: string; moon?: MoonTolerance; priority?: Priority; added: string; sessions?: Session[]; framings?: Framing[]; custom?: CustomTarget }
 
 /** Older saves kept one `framing` + `thumb` on the wish itself; fold them into the framings list. */
 export function upgradeWish(w: WishItem & { framing?: FrameData; thumb?: string }): WishItem {

@@ -57,3 +57,13 @@ export function todayIn(tz: string): string {
   const p = parts(tz, Date.now())
   return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`
 }
+
+/** Night + minutes after 17:00 for the current moment; by day, tonight at 22:00. */
+export function nightNow(tz: string) {
+  const { date, minutes } = localNow(tz)
+  const [y, m, d] = date.split('-').map(Number)
+  const ymd = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+  if (minutes >= 17 * 60) return { night: date, tmin: minutes - 17 * 60 }
+  if (minutes < 8 * 60) return { night: ymd(new Date(y, m - 1, d - 1)), tmin: minutes + 7 * 60 }
+  return { night: date, tmin: 5 * 60 }
+}

@@ -17,7 +17,7 @@ const scoreColor = (s: number) => {
 const label = (o: CatObject) => (isCustom(o.id) ? o.names[0] : o.m ? `${o.m} · ${o.id}` : o.id)
 const fmt = (d: Date) => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
 
-export default function Planner({ store, catalog, onShow }: { store: Store; catalog: CatObject[]; onShow: (o: CatObject, fid?: string) => void }) {
+export default function Planner({ store, catalog, onShow, onDetails }: { store: Store; catalog: CatObject[]; onShow: (o: CatObject, fid?: string) => void; onDetails: (o: CatObject) => void }) {
   const [tab, setTab] = useState<'wishlist' | 'calendar'>('calendar')
   const [nights, setNights] = useState<EphemNight[] | null>(null)
   const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1) })
@@ -72,7 +72,7 @@ export default function Planner({ store, catalog, onShow }: { store: Store; cata
         return (
           <div key={w.id} className="card">
             <div className="ch">
-              <b>{label(o)}</b> <small>{o.names[0] ?? o.typeName}</small>
+              <button className="title" onClick={() => onDetails(o)} title="Details"><b>{label(o)}</b></button> <small>{o.names[0] ?? o.typeName}</small>{w.priority && <span className={`dot ${w.priority}`} title={`${w.priority} priority`} />}
               <span className="sp" />
               <button onClick={() => onShow(o)}>Show</button>
               <button onClick={() => confirm(`Remove ${o.id}?`) && store.removeWish(w.id)}>✕</button>
@@ -111,7 +111,7 @@ export default function Planner({ store, catalog, onShow }: { store: Store; cata
       })}
 
       {tab === 'calendar' && items.length > 0 && nights && (
-        <CalendarView {...{ month, setMonth, picked, setPicked, onlyOpen, setOnlyOpen, start, results, active: onlyOpen ? active : items, onShow, nights, cloud, useWx, setUseWx }} />
+        <CalendarView {...{ month, setMonth, picked, setPicked, onlyOpen, setOnlyOpen, start, results, active: onlyOpen ? active : items, onShow, onDetails, nights, cloud, useWx, setUseWx }} />
       )}
     </div>
   )
@@ -125,10 +125,10 @@ function More({ title, children }: { title: string; children: React.ReactNode })
 
 type Item = { w: Store['wishlist'][number]; o: CatObject }
 
-function CalendarView({ month, setMonth, picked, setPicked, onlyOpen, setOnlyOpen, start, results, active, onShow, nights, cloud, useWx, setUseWx }: {
+function CalendarView({ month, setMonth, picked, setPicked, onlyOpen, setOnlyOpen, start, results, active, onShow, onDetails, nights, cloud, useWx, setUseWx }: {
   month: Date; setMonth: (d: Date) => void; picked: number; setPicked: (i: number) => void
   onlyOpen: boolean; setOnlyOpen: (b: boolean) => void; start: Date
-  results: Map<string, NightResult[]>; active: Item[]; onShow: (o: CatObject) => void
+  results: Map<string, NightResult[]>; active: Item[]; onShow: (o: CatObject) => void; onDetails: (o: CatObject) => void
   nights: EphemNight[]; cloud: Cloud | null; useWx: boolean; setUseWx: (b: boolean) => void
 }) {
   const dayIdx = (d: Date) => Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() - new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime()) / 86400000)
@@ -154,10 +154,13 @@ function CalendarView({ month, setMonth, picked, setPicked, onlyOpen, setOnlyOpe
     return c === undefined ? r.score : r.score * (1 - c / 100)
   }
 
+  // unfinished projects first, then by the priority the user gave
+  const bonus = (w: Item['w']) => (w.status === 'progress' ? 10 : 0) + (w.priority === 'high' ? 6 : w.priority === 'low' ? -4 : 0)
+
   const rows = active
     .map((x) => ({ ...x, r: results.get(x.w.id)?.[picked] }))
     .filter((x): x is typeof x & { r: NightResult } => !!x.r)
-    .sort((a, b) => eff(b.r, picked) + (b.w.status === 'progress' ? 10 : 0) - (eff(a.r, picked) + (a.w.status === 'progress' ? 10 : 0)))
+    .sort((a, b) => eff(b.r, picked) + bonus(b.w) - (eff(a.r, picked) + bonus(a.w)))
 
   const pickedDate = new Date(start.getFullYear(), start.getMonth(), start.getDate() + picked)
 
@@ -189,7 +192,7 @@ function CalendarView({ month, setMonth, picked, setPicked, onlyOpen, setOnlyOpe
       {rows.length === 0 && <p className="note">Nothing on the list for this night.</p>}
       {rows.map(({ w, o, r }) => (
         <div key={w.id} className={`cand ${r.suitable ? '' : 'no'}`}>
-          <div className="ch"><b>{label(o)}</b> <small>{o.names[0] ?? o.typeName}</small>{w.status === 'progress' && <span className="tag">in progress</span>}
+          <div className="ch"><button className="title" onClick={() => onDetails(o)} title="Details"><b>{label(o)}</b></button> <small>{o.names[0] ?? o.typeName}</small>{w.status === 'progress' && <span className="tag">in progress</span>}
             <span className="sp" /><b className="sc" style={{ color: scoreColor(Math.max(r.score, 30)) }}>{r.score}</b></div>
           <div className="tl">{r.usable.map((u, i) => <span key={i} className={u ? 'u' : ''} />)}</div>
           {cloud && nights[picked] && nights[picked].samples.some((e) => cloudAt(cloud, e.t) !== undefined) && (

@@ -4,7 +4,7 @@ import { horizonAlt, moonIllum, type Location, type NightSample } from '../lib/a
 
 const W = 320, H = 190, PAD = { l: 26, r: 6, t: 8, b: 22 }
 
-export default function AltitudeChart({ samples, loc, minAlt, stepMin = 10, marker, onScrub }: { samples: NightSample[]; loc: Location; minAlt: number; stepMin?: number; marker?: number; onScrub?: (minutes: number) => void }) {
+export default function AltitudeChart({ samples, loc, minAlt, stepMin = 10, marker, onScrub, compact = false }: { samples: NightSample[]; loc: Location; minAlt: number; stepMin?: number; marker?: number; onScrub?: (minutes: number) => void; compact?: boolean }) {
   const n = samples.length - 1
   const x = (i: number) => PAD.l + (i / n) * (W - PAD.l - PAD.r)
   const y = (alt: number) => PAD.t + (1 - Math.max(0, alt) / 90) * (H - PAD.t - PAD.b)
@@ -40,12 +40,12 @@ export default function AltitudeChart({ samples, loc, minAlt, stepMin = 10, mark
         {samples.map((s, i) => (s.usable ? <circle key={i} cx={x(i)} cy={y(s.alt)} r={1.8} className="ok" /> : null))}
         {marker !== undefined && <line x1={x(marker / stepMin)} x2={x(marker / stepMin)} y1={PAD.t} y2={H - PAD.b} className="now" />}
       </svg>
-      <p className="legend"><i className="k tgt" />Target <i className="k moon" />Moon <i className="k lim" />Min altitude / horizon <i className="k okd" />Usable</p>
+      {!compact && <><p className="legend"><i className="k tgt" />Target <i className="k moon" />Moon <i className="k lim" />Min altitude / horizon <i className="k okd" />Usable</p>
       <dl>
         <dt>Usable time (sun &lt; −12°)</dt><dd>{info.hours.toFixed(1)} h</dd>
         <dt>Peak altitude</dt><dd>{info.peak.toFixed(0)}°</dd>
         <dt>Moon illuminated</dt><dd>{Math.round(info.moon * 100)}%</dd>
-      </dl>
+      </dl></>}
     </div>
   )
 }

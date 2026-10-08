@@ -1,8 +1,10 @@
 import * as Astronomy from 'astronomy-engine'
+import type { Optics } from './optics'
 import { tzOf, zonedEpoch } from './tz'
 import { horizonAlt, moonIllum, separation, type Location } from './astro'
 
-export interface Settings { minAlt: number; minHours: number }
+/** `scope`: the user's default telescope + camera (account setting); the app falls back to the Seestar S50 Pro preset. */
+export interface Settings { minAlt: number; minHours: number; scope?: { presetId: string; optics: Optics } }
 export const DEFAULT_SETTINGS: Settings = { minAlt: 25, minHours: 2 }
 
 export type MoonTolerance = 'tolerant' | 'dark'

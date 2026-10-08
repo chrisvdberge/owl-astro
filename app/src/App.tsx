@@ -2,17 +2,19 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import A from 'aladin-lite'
 import { CATALOGS, catalogTag, customObject, isCustom, loadCatalog, searchCatalog, sexa, type CatObject, type CustomTarget } from './lib/catalog'
 import { PRESETS, compute, framingFit, mosaicPanels, rectCorners, sessionCrop, type Optics } from './lib/optics'
+import { scopeName } from './components/FramingPreview'
 import { SURVEYS, defaultSurvey } from './lib/surveys'
 import * as Astronomy from 'astronomy-engine'
 import { lstHours, parallacticAngle, parallacticFromLst, sampleNight, separation, targetAltAz, type Location } from './lib/astro'
 import { useStore, type Status } from './lib/store'
-import { clockIn, localNow, tzFromCoords, tzOf, zonedEpoch } from './lib/tz'
+import { clockIn, nightNow, tzFromCoords, tzOf, zonedEpoch } from './lib/tz'
 import { useAuth } from './lib/auth'
 import Account from './components/Account'
 import HorizonEditor from './components/HorizonEditor'
 import AltitudeChart from './components/AltitudeChart'
 import Planner from './components/Planner'
 import TargetInfo from './components/TargetInfo'
+import TargetDetail from './components/TargetDetail'
 
 const SEEING = [
   { v: 1.5, l: '1.5″ — Excellent' }, { v: 2, l: '2″ — Good' }, { v: 3, l: '3″ — Average backyard' },
@@ -24,15 +26,6 @@ const LOOK_KEY = 'astroplanner.look'
 const NEUTRAL = { brightness: 0, contrast: 0, saturation: 0, gamma: 1 }
 type Look = typeof NEUTRAL
 const loadLook = (): Look => { try { return { ...NEUTRAL, ...JSON.parse(localStorage.getItem(LOOK_KEY) ?? '{}') } } catch { return NEUTRAL } }
-/** Night + minutes after 17:00 for the current moment; by day, tonight at 22:00. */
-function nightNow(tz: string) {
-  const { date, minutes } = localNow(tz)
-  const [y, m, d] = date.split('-').map(Number)
-  const ymd = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
-  if (minutes >= 17 * 60) return { night: date, tmin: minutes - 17 * 60 }
-  if (minutes < 8 * 60) return { night: ymd(new Date(y, m - 1, d - 1)), tmin: minutes + 7 * 60 }
-  return { night: date, tmin: 5 * 60 }
-}
 const hips = (id: string) => SURVEYS.find((s) => s.id === id)!.hips
 
 export default function App() {
@@ -55,6 +48,7 @@ export default function App() {
   const [frame, setFrame] = useState<{ ra: number; dec: number }>({ ra: 83.82, dec: -5.39 })
   const [frameSel, setFrameSel] = useState(false)
   const [plan, setPlan] = useState(false)
+  const [detail, setDetail] = useState<CatObject | null>(null)
   const [sess, setSess] = useState<[number, number] | null>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; ra: number; dec: number } | null>(null)
   const [toast, setToast] = useState('')
@@ -74,6 +68,9 @@ export default function App() {
   const [panel, setPanel] = useState<'left' | 'right' | null>(null)
 
   const seeing = loc.seeing ?? 3
+  // the account's default telescope + camera; the Seestar S50 Pro until the user picks another
+  const defaultScope = store.settings.scope ?? { presetId: PRESETS[0].id, optics: PRESETS[0].optics }
+  const scopeIsDefault = presetId === defaultScope.presetId && JSON.stringify(optics) === JSON.stringify(defaultScope.optics)
   const wish = target.obj ? store.wishlist.find((w) => w.id === target.obj!.id) : undefined
   const res = useMemo(() => compute(optics, seeing), [optics, seeing])
   const fit = target.obj ? framingFit(target.obj.maj, target.obj.min, res.fovW, res.fovH) : null
@@ -126,6 +123,12 @@ export default function App() {
   }
 
   useEffect(() => { loadCatalog().then(setCatalog) }, [])
+
+  // follow the account's default scope (also after it arrives from sync)
+  useEffect(() => {
+    const sc = store.settings.scope
+    if (sc) { setOptics(sc.optics); setPresetId(sc.presetId) }
+  }, [store.settings.scope])
 
   useEffect(() => {
     let dead = false
@@ -438,6 +441,10 @@ export default function App() {
           <select value={optics.drizzle} onChange={(e) => { setPresetId('custom'); setOptics({ ...optics, drizzle: +e.target.value }) }}>{[1, 2, 3].map((b) => <option key={b} value={b}>{b}×</option>)}</select>
         </label>
         {num('reducer', 'Reducer / barlow ×')}
+        <div className="row wrap">
+          <button disabled={scopeIsDefault} onClick={() => store.setSettings({ scope: { presetId, optics } })} title="Used for framing previews in target cards and as the starting setup">★ Make default scope</button>
+          <small className="note">Default: {scopeName(defaultScope)}</small>
+        </div>
         <label className="f"><span>Mount</span>
           <select value={mount} onChange={(e) => { const m = e.target.value as 'altaz' | 'eq'; setMount(m); try { localStorage.setItem('astroplanner.mount', m) } catch { /* ignore */ } }}>
             <option value="altaz">Alt-az (field rotates)</option><option value="eq">Equatorial (fixed angle)</option></select>
@@ -566,6 +573,7 @@ export default function App() {
         ))}
         {target.obj && (
           <>
+            <button onClick={() => setDetail(target.obj!)}>ⓘ Details &amp; images</button>
             <TargetInfo o={target.obj} />
             {fit && (
               <p className={`badge ${fit.kind}`}>
@@ -601,7 +609,7 @@ export default function App() {
           <button onClick={() => setPanel(panel === 'right' ? null : 'right')}>Results</button>
         </span>
       </header>
-      {view === 'planner' && <main className="pmain"><Planner store={store} catalog={catalog} onShow={show} /></main>}
+      {view === 'planner' && <main className="pmain"><Planner store={store} catalog={catalog} onShow={show} onDetails={setDetail} /></main>}
       <aside className={`l ${panel === 'left' ? 'open' : ''}`}>{left}</aside>
       <div className="view" ref={viewRef} />
       {menu && (() => {
@@ -624,11 +632,17 @@ export default function App() {
                 </>
               )
             })()}
+            {o && <button onClick={() => { setDetail(o); setMenu(null) }}>ⓘ View details for {nameOf(o)}</button>}
             {o && <button onClick={() => saveFraming('wishlist', { custom: true })}>✎ Save as custom named field…</button>}
           </div>
         )
       })()}
       {menu && <div className="ctxbg" onMouseDown={() => setMenu(null)} onContextMenu={(e) => { e.preventDefault(); setMenu(null) }} />}
+      {detail && (
+        <TargetDetail o={detail} store={store} scope={defaultScope} onClose={() => setDetail(null)}
+          onShow={(fid) => { show(detail, fid); setDetail(null) }}
+          onPlanner={() => { setView('planner'); setDetail(null) }} />
+      )}
       {frameSel && view === 'sky' && <div className="fhint">Frame selected — drag to move it · click elsewhere or Esc to release</div>}
       {toast && <div className="toast">{toast}</div>}
       <aside className={`r ${panel === 'right' ? 'open' : ''}`}>{right}</aside>

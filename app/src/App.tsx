@@ -19,6 +19,10 @@ const SEEING = [
 ]
 
 const nameOf = (o: CatObject) => (isCustom(o.id) ? o.names[0] : o.m ?? o.id)
+const LOOK_KEY = 'astroplanner.look'
+const NEUTRAL = { brightness: 0, contrast: 0, saturation: 0, gamma: 1 }
+type Look = typeof NEUTRAL
+const loadLook = (): Look => { try { return { ...NEUTRAL, ...JSON.parse(localStorage.getItem(LOOK_KEY) ?? '{}') } } catch { return NEUTRAL } }
 const hips = (id: string) => SURVEYS.find((s) => s.id === id)!.hips
 
 export default function App() {
@@ -34,6 +38,7 @@ export default function App() {
   const [optics, setOptics] = useState<Optics>(PRESETS[0].optics)
   const [rotation, setRotation] = useState(0)
   const [survey, setSurvey] = useState('dss2')
+  const [look, setLook] = useState<Look>(loadLook)
   const [overlayId, setOverlayId] = useState('none')
   const [opacity, setOpacity] = useState(0.4)
   const [mosaic, setMosaic] = useState<{ cols: number; rows: number }>({ cols: 1, rows: 1 })
@@ -94,6 +99,15 @@ export default function App() {
   }, [])
 
   useEffect(() => { if (ready) aladin.current.setBaseImageLayer(hips(survey)) }, [ready, survey])
+
+  // brightness / contrast / saturation / gamma of the background survey (replaces Aladin's right-drag adjustment)
+  useEffect(() => {
+    if (!ready) return
+    const layer = aladin.current.getBaseImageLayer?.()
+    layer?.setBrightness?.(look.brightness); layer?.setContrast?.(look.contrast)
+    layer?.setSaturation?.(look.saturation); layer?.setGamma?.(look.gamma)
+    try { localStorage.setItem(LOOK_KEY, JSON.stringify(look)) } catch { /* ignore */ }
+  }, [ready, survey, look])
 
   useEffect(() => {
     if (!ready) return
@@ -317,6 +331,11 @@ export default function App() {
             <option value="none">None</option>{SURVEYS.filter((s) => s.id !== survey).map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
         </label>
+        {([['brightness', 'Brightness', -1, 1, 0.05], ['contrast', 'Contrast', -1, 1, 0.05], ['saturation', 'Saturation', -1, 1, 0.05], ['gamma', 'Gamma', 0.3, 3, 0.05]] as const).map(([k, l, min, max, step]) => (
+          <label key={k} className="f"><span>{l}</span>
+            <input type="range" min={min} max={max} step={step} value={look[k]} onChange={(e) => setLook({ ...look, [k]: +e.target.value })} onDoubleClick={() => setLook({ ...look, [k]: NEUTRAL[k] })} /><em>{look[k].toFixed(2)}</em></label>
+        ))}
+        {JSON.stringify(look) !== JSON.stringify(NEUTRAL) && <button onClick={() => setLook(NEUTRAL)}>Reset image adjustments</button>}
         {overlayId !== 'none' && (
           <label className="f"><span>Opacity</span><input type="range" min={0} max={1} step={0.05} value={opacity} onChange={(e) => setOpacity(+e.target.value)} /></label>
         )}

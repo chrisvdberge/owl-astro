@@ -38,5 +38,118 @@ for (const f of ['NGC.csv', 'addendum.csv']) {
     })
   }
 }
+
+// ---- Caldwell aliases (OpenNGC lists them as "C 020") ----
+for (const o of out) {
+  for (const a of [...o.alt]) {
+    const m = a.match(/^C (\d+)$/)
+    if (m) o.alt.push(`C ${+m[1]}`, `Caldwell ${+m[1]}`)
+  }
+}
+
+// ---- extra catalogs (data/raw, fetched by scripts/fetch-catalogs.mjs) ----
+function csv(name) {
+  const lines = readFileSync(new URL(`raw/${name}.csv`, dir), 'utf8').trim().split('\n')
+  const split = (l) => { const r = []; let cur = '', q = false
+    for (const ch of l) { if (ch === '"') q = !q; else if (ch === ',' && !q) { r.push(cur); cur = '' } else cur += ch }
+    r.push(cur); return r }
+  const head = split(lines[0])
+  return lines.slice(1).map((l) => Object.fromEntries(split(l).map((v, i) => [head[i], v.trim()])))
+}
+const n = (v) => (v === '' || v === undefined || Number.isNaN(+v) ? null : +v)
+const r5 = (x) => +x.toFixed(5)
+
+// B1900 -> J2000 precession (Meeus 21.2) for the Sharpless catalog
+function b1900ToJ2000(raDeg, decDeg) {
+  const d2r = Math.PI / 180, as = d2r / 3600
+  const T = -1, t = 1
+  const zeta = ((2306.2181 + 1.39656 * T - 0.000139 * T * T) * t + (0.30188 - 0.000344 * T) * t * t + 0.017998 * t ** 3) * as
+  const z = ((2306.2181 + 1.39656 * T - 0.000139 * T * T) * t + (1.09468 + 0.000066 * T) * t * t + 0.018203 * t ** 3) * as
+  const th = ((2004.3109 - 0.8533 * T - 0.000217 * T * T) * t - (0.42665 + 0.000217 * T) * t * t - 0.041833 * t ** 3) * as
+  const a = raDeg * d2r, d = decDeg * d2r
+  const A = Math.cos(d) * Math.sin(a + zeta)
+  const B = Math.cos(th) * Math.cos(d) * Math.cos(a + zeta) - Math.sin(th) * Math.sin(d)
+  const C = Math.sin(th) * Math.cos(d) * Math.cos(a + zeta) + Math.cos(th) * Math.sin(d)
+  return [(((Math.atan2(A, B) + z) / d2r) % 360 + 360) % 360, Math.asin(C) / d2r]
+}
+
+const mk = (id, type, ra, dec, maj, min = maj, extra = {}) => ({
+  id, m: null, type, typeName: TYPES[type] ?? type, ra: r5(ra), dec: r5(dec), con: '',
+  maj: maj ? +maj.toFixed(1) : null, min: min ? +min.toFixed(1) : null, pa: null, mag: null, sb: null, names: [], alt: [], ...extra,
+})
+
+const extra = []
+for (const r of csv('vdb')) {
+  const rad = Math.max(n(r.BRadMax) ?? 0, n(r.RRadMax) ?? 0)
+  extra.push(mk(`vdB ${+r.VdB}`, 'RfN', +r._RA, +r._DE, rad * 2, undefined, { alt: [r.DM, +r.HD ? `HD ${+r.HD}` : ''].filter(Boolean) }))
+}
+for (const r of csv('barnard')) extra.push(mk(`B ${+r.Barn}`, 'DrkN', +r._RA_icrs, +r._DE_icrs, n(r.Diam)))
+for (const r of csv('ldn')) {
+  const d = n(r.Area) ? 2 * Math.sqrt(+r.Area / Math.PI) * 60 : null
+  extra.push(mk(`LDN ${+r.LDN}`, 'DrkN', +r._RA_icrs, +r._DE_icrs, d, undefined, { alt: r.Barn ? [`B ${+r.Barn}`] : [] }))
+}
+for (const r of csv('sh2')) {
+  const [ra, dec] = b1900ToJ2000(+r.RA1900, +r.DE1900)
+  extra.push(mk(`Sh2-${+r.Sh2}`, 'HII', ra, dec, n(r.Diam)))
+}
+for (const r of csv('rcw')) {
+  const ids = (r.IDs.match(/\b(NGC|IC)\s?\d+/g) ?? []).map((x) => x.replace(/(NGC|IC)\s?/, '$1 '))
+  extra.push(mk(`RCW ${+r.RCW}`, 'HII', +r._RA_icrs, +r._DE_icrs, n(r.MajAxis), n(r.MinAxis), { alt: ids }))
+}
+for (const r of csv('hickson')) extra.push(mk(`HCG ${+r.HCG}`, 'GGroup', +r._RA_icrs, +r._DE_icrs, n(r.AngSize), undefined, { mag: n(r.Totmag), alt: [`Hickson ${+r.HCG}`] }))
+{
+  const arp = new Map()
+  for (const r of csv('arp')) {
+    const k = +r.Arp
+    const e = arp.get(k) ?? { ra: +r.RAJ2000, dec: +r.DEJ2000, maj: 0, min: 0, mag: null, names: [] }
+    e.maj = Math.max(e.maj, n(r.dim1) ?? 0); e.min = Math.max(e.min, n(r.dim2) ?? 0)
+    e.mag = e.mag === null ? n(r.VT) : Math.min(e.mag, n(r.VT) ?? 99)
+    if (r.Name) e.names.push(r.Name.replace(/\s+/g, ' '))
+    arp.set(k, e)
+  }
+  for (const [k, e] of arp) extra.push(mk(`Arp ${k}`, e.names.length > 1 ? 'GPair' : 'G', e.ra, e.dec, e.maj, e.min, { mag: e.mag, alt: e.names }))
+}
+for (const r of csv('clusters')) extra.push(mk(r.Cluster.replace(/\s+/g, ' '), 'OCl', +r.RAJ2000, +r.DEJ2000, n(r.Diam)))
+for (const r of csv('abell')) {
+  const num = +r.main_id.match(/(\d+)\s*$/)[1]
+  extra.push(mk(`Abell ${num}`, 'PN', +r.ra, +r.dec, n(r.galdim_majaxis), undefined, { alt: [`PN A66 ${num}`] }))
+}
+
+// hand-picked popular names for objects that have none in OpenNGC
+const NAMES = {
+  'B 33': 'Horsehead Nebula (dark)', 'B 72': 'Snake Nebula', 'B 142': "Barnard's E (north)", 'B 143': "Barnard's E (south)",
+  'LDN 1622': 'Boogeyman Nebula', 'LDN 1235': 'Shark Nebula', 'vdB 141': 'Ghost Nebula', 'vdB 142': "Elephant's Trunk Nebula",
+  'Sh2-101': 'Tulip Nebula', 'Sh2-155': 'Cave Nebula', 'Sh2-132': 'Lion Nebula', 'Sh2-261': "Lower's Nebula",
+  'Sh2-240': 'Spaghetti Nebula', 'Sh2-129': 'Flying Bat Nebula', 'Sh2-308': 'Dolphin Head Nebula', 'Sh2-190': 'Heart Nebula',
+  'Sh2-199': 'Soul Nebula', 'Sh2-275': 'Rosette Nebula',
+}
+
+// cross-identify with OpenNGC objects at (almost) the same position, so searching "IC 1805" also finds Sh2-190
+const OLD_NEB = new Set(['HII', 'EmN', 'Neb', 'RfN', 'DrkN', 'PN', 'SNR', 'Cl+N'])
+const dist = (a, b) => {
+  const d = Math.PI / 180
+  const c = Math.sin(a.dec * d) * Math.sin(b.dec * d) + Math.cos(a.dec * d) * Math.cos(b.dec * d) * Math.cos((a.ra - b.ra) * d)
+  return (Math.acos(Math.min(1, Math.max(-1, c))) / d) * 60
+}
+let matched = 0
+for (const e of extra) {
+  if (NAMES[e.id]) e.names.push(NAMES[e.id])
+  if (/^(Arp|HCG)/.test(e.id)) continue
+  const tol = Math.max(3, 0.4 * (e.maj ?? 0))
+  let best = null
+  for (const o of out) {
+    if (!(e.type === 'OCl' ? o.type === 'OCl' || o.type === 'Cl+N' : e.type === 'PN' ? o.type === 'PN' : OLD_NEB.has(o.type))) continue
+    if (Math.abs(o.dec - e.dec) * 60 > tol) continue
+    const d = dist(e, o)
+    if (d <= tol && (!best || d < best.d)) best = { o, d }
+  }
+  if (best) { e.alt.push(best.o.id, ...(best.o.m ? [best.o.m] : [])); e.names.push(...best.o.names); matched++ }
+}
+out.push(...extra)
+for (const o of out) { o.names = [...new Set(o.names)]; o.alt = [...new Set(o.alt)].filter((a) => a !== o.id) }
+
 writeFileSync(new URL('../public/catalog.json', import.meta.url), JSON.stringify(out))
-console.log(`${out.length} objects, ${out.filter((o) => o.m).length} Messier`)
+const by = {}
+for (const o of out) { const k = o.m ? 'Messier' : o.id.match(/^[A-Za-z]+/)?.[0] ?? '?'; by[k] = (by[k] ?? 0) + 1 }
+for (const k of Object.keys(by)) if (by[k] < 20) delete by[k]
+console.log(`${out.length} objects (${matched} cross-identified)`, by)

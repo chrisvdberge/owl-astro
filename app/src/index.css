@@ -81,3 +81,4 @@ dl { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; margin: 0 0 
 button:disabled { opacity: .4; cursor: default; }
 .acct { margin-left: auto; font-size: 12.5px; } .acct.synced { color: var(--ok); } .acct.syncing { color: var(--warn); } .acct.error { color: var(--bad); }
 header .tabs { margin-left: auto; } .acct + .tabs { margin-left: 0; }
+.ctag { float: right; font-style: normal; font-size: 10.5px; color: var(--mute); border: 1px solid var(--line); border-radius: 8px; padding: 0 6px; margin-top: 2px; }

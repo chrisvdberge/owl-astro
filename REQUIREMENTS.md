@@ -33,7 +33,8 @@ Reference: stellarnomads.com telescope FOV calculator (survey background + FOV o
 - **Horizon profile**: drawn on an azimuth (0–360°) × altitude graph; import Stellarium / N.I.N.A. horizon files.
 
 ## 4. Catalog
-**v1: Messier + NGC/IC (OpenNGC) only.** The rest below comes later.
+**Included:** Messier, NGC/IC, Caldwell (aliases), vdB, Barnard, LDN, Sharpless, RCW, Hickson, Arp, Abell PN, Collinder/Melotte (partial).
+**Not yet:** Herschel 400 (no clean source list), full Collinder/Melotte, UGC/PGC galaxies.
 - Messier, NGC/IC (OpenNGC), Caldwell, Herschel 400.
 - Dark & reflection: vdB, LDN, Barnard.
 - Emission & PN: Sharpless (Sh2), Abell PN, RCW.

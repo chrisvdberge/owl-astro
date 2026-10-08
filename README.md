@@ -12,6 +12,11 @@ cd app && npm install && npm run dev
 
 Without any configuration everything is stored in your browser (local only).
 
+## Catalog
+
+`app/public/catalog.json` is generated: `node app/scripts/fetch-catalogs.mjs` downloads the extra catalogs into
+`data/raw/`, then `node app/scripts/build-catalog.mjs` merges them with OpenNGC (cross-identifying objects, e.g. Sh2-190 = IC 1805).
+
 ## Optional: sync with Supabase
 
 Sync needs a Supabase backend. Run one locally (needs Docker) or use a hosted project.

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import A from 'aladin-lite'
-import { loadCatalog, searchCatalog, sexa, type CatObject } from './lib/catalog'
+import { CATALOGS, catalogTag, loadCatalog, searchCatalog, sexa, type CatObject } from './lib/catalog'
 import { PRESETS, compute, framingFit, mosaicPanels, type Optics } from './lib/optics'
 import { SURVEYS, defaultSurvey } from './lib/surveys'
 import { sampleNight, type Location } from './lib/astro'
@@ -24,6 +24,8 @@ export default function App() {
   const overlay = useRef<any>(null) // eslint-disable-line @typescript-eslint/no-explicit-any
   const [catalog, setCatalog] = useState<CatObject[]>([])
   const [query, setQuery] = useState('')
+  const [catFilter, setCatFilter] = useState('all')
+  const [searchFocus, setSearchFocus] = useState(false)
   const [target, setTarget] = useState<{ ra: number; dec: number; label: string; obj?: CatObject }>({ ra: 83.82, dec: -5.39, label: 'M 42', })
   const [presetId, setPresetId] = useState('seestar-s50-pro')
   const [optics, setOptics] = useState<Optics>(PRESETS[0].optics)
@@ -46,7 +48,7 @@ export default function App() {
 
   const res = useMemo(() => compute(optics, seeing), [optics, seeing])
   const fit = target.obj ? framingFit(target.obj.maj, target.obj.min, res.fovW, res.fovH) : null
-  const hits = useMemo(() => searchCatalog(catalog, query), [catalog, query])
+  const hits = useMemo(() => searchCatalog(catalog, query, 12, catFilter), [catalog, query, catFilter])
 
   const samples = useMemo(() => {
     const [y, m, d] = night.split('-').map(Number)
@@ -139,12 +141,17 @@ export default function App() {
     <>
       <section>
         <h3>Navigate</h3>
+        <label className="f"><span>Catalog</span>
+          <select value={catFilter} onChange={(e) => setCatFilter(e.target.value)}>{CATALOGS.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select>
+        </label>
         <div className="search">
-          <input placeholder="M31, NGC 7000, Pacman…" value={query} onChange={(e) => setQuery(e.target.value)} />
-          {hits.length > 0 && (
+          <input placeholder={catFilter === 'all' ? 'M31, NGC 7000, Tulip…' : 'Search or browse…'} value={query}
+            onChange={(e) => setQuery(e.target.value)} onFocus={() => setSearchFocus(true)} onBlur={() => setSearchFocus(false)} />
+          {hits.length > 0 && (query.length >= 2 || searchFocus) && (
             <ul>{hits.map((o) => (
-              <li key={o.id} onClick={() => pick(o)}>
+              <li key={o.id} onMouseDown={(e) => { e.preventDefault(); pick(o) }}>
                 <b>{o.m ? `${o.m} · ${o.id}` : o.id}</b> <small>{o.names[0] ?? o.typeName}</small>
+                <i className="ctag">{catalogTag(o)}</i>
               </li>
             ))}</ul>
           )}

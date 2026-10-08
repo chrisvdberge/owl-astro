@@ -143,3 +143,15 @@ details.more { margin-top: 8px; } details.more summary { cursor: pointer; color:
 .fpimg img { display: block; width: 100%; height: 100%; } .fpimg svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .fpimg polygon { fill: rgba(56,189,248,.06); stroke: var(--acc); stroke-width: 2; vector-effect: non-scaling-stroke; }
 .fpmsg { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; text-align: center; padding: 20px; }
+
+/* tonight */
+.tonight { max-width: 860px; margin: 0 auto; } .th { margin: 4px 0 12px; font-size: 22px; } .th small { font-weight: 400; color: var(--mute); font-size: 14px; margin-left: 8px; }
+.tsum { display: grid; grid-template-columns: repeat(3, 1fr) auto; gap: 10px; align-items: stretch; margin-bottom: 14px; padding: 0; border: none; }
+.tsum > div { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 2px; } .tsum .k { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--mute); } .tsum b { font-size: 17px; } .tsum small { color: var(--mute); font-size: 12px; }
+.verdict { display: grid; place-items: center; min-width: 90px; font-weight: 700; font-size: 18px; border-radius: 10px; } .verdict.go { color: var(--ok); border-color: var(--ok) !important; background: rgba(74,222,128,.08) !important; } .verdict.maybe { color: var(--warn); border-color: var(--warn) !important; background: rgba(251,191,36,.08) !important; } .verdict.no { color: var(--bad); border-color: var(--bad) !important; background: rgba(248,113,113,.08) !important; }
+.tplan { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; } .tplan h3 { margin: 0 0 8px; }
+.pbar { position: relative; height: 26px; background: #121a29; border-radius: 4px; overflow: hidden; } .pbar span { position: absolute; top: 0; bottom: 0; color: #0b0f17; font-size: 11px; font-weight: 700; padding: 5px 6px; overflow: hidden; white-space: nowrap; border-radius: 3px; }
+.nowline { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--fg); z-index: 2; }
+.plist { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 3px; font-size: 13px; } .plist i, .dotc { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 8px; }
+.tcard { display: flex; gap: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 10px 0; } .tcard .thumb.sm { width: 120px; height: 68px; object-fit: cover; flex: none; } .tbody { flex: 1; min-width: 0; }
+@media (max-width: 700px) { .tsum { grid-template-columns: 1fr 1fr; } .verdict { padding: 10px; } .tcard { flex-direction: column; } .tcard .thumb.sm { width: 100%; height: auto; } }

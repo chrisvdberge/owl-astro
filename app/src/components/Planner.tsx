@@ -4,7 +4,7 @@ import TargetInfo from './TargetInfo'
 import type { useStore } from '../lib/store'
 import { tzOf, todayIn } from '../lib/tz'
 import { cloudAt, meanCloud, useCloud, type Cloud } from '../lib/weather'
-import { bestPeriods, defaultMoonTolerance, ephemeris, scoreNights, weekly, type EphemNight, type NightResult } from '../lib/suitability'
+import { bestPeriods, defaultMoonTolerance, rankBonus, ephemeris, scoreNights, weekly, type EphemNight, type NightResult } from '../lib/suitability'
 
 type Store = ReturnType<typeof useStore>
 const DAYS = 365
@@ -155,12 +155,11 @@ function CalendarView({ month, setMonth, picked, setPicked, onlyOpen, setOnlyOpe
   }
 
   // unfinished projects first, then by the priority the user gave
-  const bonus = (w: Item['w']) => (w.status === 'progress' ? 10 : 0) + (w.priority === 'high' ? 6 : w.priority === 'low' ? -4 : 0)
 
   const rows = active
     .map((x) => ({ ...x, r: results.get(x.w.id)?.[picked] }))
     .filter((x): x is typeof x & { r: NightResult } => !!x.r)
-    .sort((a, b) => eff(b.r, picked) + bonus(b.w) - (eff(a.r, picked) + bonus(a.w)))
+    .sort((a, b) => eff(b.r, picked) + rankBonus(b.w) - (eff(a.r, picked) + rankBonus(a.w)))
 
   const pickedDate = new Date(start.getFullYear(), start.getMonth(), start.getDate() + picked)
 

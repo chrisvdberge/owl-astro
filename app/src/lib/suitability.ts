@@ -7,6 +7,9 @@ import { horizonAlt, moonIllum, separation, type Location } from './astro'
 export interface Settings { minAlt: number; minHours: number; scope?: { presetId: string; optics: Optics } }
 export const DEFAULT_SETTINGS: Settings = { minAlt: 25, minHours: 2 }
 
+/** Ranking nudge for a wishlist item: unfinished projects first, then the priority the user gave. */
+export const rankBonus = (w: { status: string; priority?: string }) => (w.status === 'progress' ? 10 : 0) + (w.priority === 'high' ? 6 : w.priority === 'low' ? -4 : 0)
+
 export type MoonTolerance = 'tolerant' | 'dark'
 
 /** Emission-type objects tolerate the moon with the dual-band filter; everything else wants a dark sky. */

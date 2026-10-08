@@ -592,7 +592,7 @@ export default function App() {
         <b>Astroplanner</b>
         <span className="nav">
           <button className={view === 'sky' ? 'on' : ''} onClick={() => setView('sky')}>Sky</button>
-          <button className={view === 'planner' ? 'on' : ''} onClick={() => setView('planner')}>Planner{store.wishlist.length ? ` (${store.wishlist.length})` : ''}</button>
+          <button className={view === 'planner' ? 'on' : ''} onClick={() => { setView('planner'); setFrameSel(false); setMenu(null) }}>Planner{store.wishlist.length ? ` (${store.wishlist.length})` : ''}</button>
         </span>
         <span className="tgt">{target.label} · {sexa(target.ra, target.dec)} · {res.fovW.toFixed(2)}°×{res.fovH.toFixed(2)}°</span>
         <Account auth={auth} status={store.syncStatus} />
@@ -629,7 +629,7 @@ export default function App() {
         )
       })()}
       {menu && <div className="ctxbg" onMouseDown={() => setMenu(null)} onContextMenu={(e) => { e.preventDefault(); setMenu(null) }} />}
-      {frameSel && <div className="fhint">Frame selected — drag to move it · click elsewhere or Esc to release</div>}
+      {frameSel && view === 'sky' && <div className="fhint">Frame selected — drag to move it · click elsewhere or Esc to release</div>}
       {toast && <div className="toast">{toast}</div>}
       <aside className={`r ${panel === 'right' ? 'open' : ''}`}>{right}</aside>
       {hzOpen && (

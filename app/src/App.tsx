@@ -12,6 +12,7 @@ import Account from './components/Account'
 import HorizonEditor from './components/HorizonEditor'
 import AltitudeChart from './components/AltitudeChart'
 import Planner from './components/Planner'
+import TargetInfo from './components/TargetInfo'
 
 const SEEING = [
   { v: 1.5, l: '1.5″ — Excellent' }, { v: 2, l: '2″ — Good' }, { v: 3, l: '3″ — Average backyard' },
@@ -565,9 +566,7 @@ export default function App() {
         ))}
         {target.obj && (
           <>
-            <p><small>{target.obj.typeName}{target.obj.names[0] ? ` · ${target.obj.names[0]}` : ''} · {target.obj.con}
-              {target.obj.mag != null ? ` · mag ${target.obj.mag}` : ''}
-              {target.obj.maj ? ` · ${target.obj.maj}′${target.obj.min ? ` × ${target.obj.min}′` : ''}` : ''}</small></p>
+            <TargetInfo o={target.obj} />
             {fit && (
               <p className={`badge ${fit.kind}`}>
                 {fit.kind === 'fits' && 'Fits in one frame'}

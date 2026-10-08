@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { customObject, isCustom, type CatObject } from '../lib/catalog'
+import TargetInfo from './TargetInfo'
 import type { useStore } from '../lib/store'
 import { tzOf, todayIn } from '../lib/tz'
 import { cloudAt, meanCloud, useCloud, type Cloud } from '../lib/weather'
@@ -102,6 +103,7 @@ export default function Planner({ store, catalog, onShow }: { store: Store; cata
                 ? <figure key={f.id} onClick={() => onShow(o, f.id)} title="Open this framing on the sky"><img className="thumb sm" src={f.thumb} alt={f.name} /><figcaption>{f.name}</figcaption></figure>
                 : <button key={f.id} className="lnk" onClick={() => onShow(o, f.id)}>{f.name}</button>)}</div>
             )}
+            <More title="About & example images"><TargetInfo o={o} /></More>
             <input className="notes" placeholder="Notes" value={w.notes} onChange={(e) => store.patchWish(w.id, { notes: e.target.value })} />
             <Sessions w={w} store={store} />
           </div>
@@ -113,6 +115,12 @@ export default function Planner({ store, catalog, onShow }: { store: Store; cata
       )}
     </div>
   )
+}
+
+/** Collapsed by default; the content (and its network requests) only mount once opened. */
+function More({ title, children }: { title: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false)
+  return <details className="more" onToggle={(e) => setOpen(e.currentTarget.open)}><summary>{title}</summary>{open && children}</details>
 }
 
 type Item = { w: Store['wishlist'][number]; o: CatObject }

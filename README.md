@@ -1,4 +1,4 @@
-# Astroplanner
+# Owl Astro
 
 Astrophotography planner: sky surveys with a field-of-view overlay, saved locations with a horizon profile,
 a Messier/NGC wishlist, and a calendar that ranks your targets per night (altitude, moon, cloud forecast).

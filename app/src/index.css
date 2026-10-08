@@ -79,3 +79,5 @@ dl { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; margin: 0 0 
 .srow { display: flex; justify-content: space-between; margin: 2px 0; }
 .bar { height: 6px; background: #1b2436; border-radius: 3px; overflow: hidden; margin: 4px 0 6px; } .bar span { display: block; height: 100%; background: var(--ok); }
 button:disabled { opacity: .4; cursor: default; }
+.acct { margin-left: auto; font-size: 12.5px; } .acct.synced { color: var(--ok); } .acct.syncing { color: var(--warn); } .acct.error { color: var(--bad); }
+header .tabs { margin-left: auto; } .acct + .tabs { margin-left: 0; }

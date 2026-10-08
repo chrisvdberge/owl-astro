@@ -5,6 +5,8 @@ import { PRESETS, compute, framingFit, mosaicPanels, type Optics } from './lib/o
 import { SURVEYS, defaultSurvey } from './lib/surveys'
 import { sampleNight, type Location } from './lib/astro'
 import { useStore } from './lib/store'
+import { useAuth } from './lib/auth'
+import Account from './components/Account'
 import HorizonEditor from './components/HorizonEditor'
 import AltitudeChart from './components/AltitudeChart'
 import Planner from './components/Planner'
@@ -33,7 +35,8 @@ export default function App() {
   const [mosaic, setMosaic] = useState<{ cols: number; rows: number }>({ cols: 1, rows: 1 })
   const [coordIn, setCoordIn] = useState('')
   const [ready, setReady] = useState(false)
-  const store = useStore()
+  const auth = useAuth()
+  const store = useStore(auth.user?.id ?? null)
   const loc = store.active
   const [night, setNight] = useState(() => new Date().toISOString().slice(0, 10))
   const minAlt = store.settings.minAlt
@@ -272,6 +275,7 @@ export default function App() {
           <button className={view === 'planner' ? 'on' : ''} onClick={() => setView('planner')}>Planner{store.wishlist.length ? ` (${store.wishlist.length})` : ''}</button>
         </span>
         <span className="tgt">{target.label} · {sexa(target.ra, target.dec)} · {res.fovW.toFixed(2)}°×{res.fovH.toFixed(2)}°</span>
+        <Account auth={auth} status={store.syncStatus} />
         <span className="tabs">
           <button onClick={() => setPanel(panel === 'left' ? null : 'left')}>Setup</button>
           <button onClick={() => setPanel(panel === 'right' ? null : 'right')}>Results</button>

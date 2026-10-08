@@ -17,6 +17,7 @@ export const CATALOGS: { id: string; label: string; test: (o: CatObject) => bool
   { id: 'all', label: 'All catalogs', test: () => true },
   { id: 'messier', label: 'Messier', test: (o) => !!o.m },
   { id: 'caldwell', label: 'Caldwell', test: (o) => o.alt.some((a) => /^C \d+$/.test(a)) },
+  { id: 'h400', label: 'Herschel 400', test: (o) => o.alt.includes('H400') },
   { id: 'ngc', label: 'NGC', test: (o) => o.id.startsWith('NGC ') },
   { id: 'ic', label: 'IC', test: (o) => o.id.startsWith('IC ') },
   { id: 'sh2', label: 'Sharpless (Sh2)', test: (o) => o.id.startsWith('Sh2-') },
@@ -33,7 +34,7 @@ export const CATALOGS: { id: string; label: string; test: (o: CatObject) => bool
 /** Short catalog tag for a result row. */
 export function catalogTag(o: CatObject): string {
   if (o.m) return 'Messier'
-  return CATALOGS.slice(3).find((c) => c.test(o))?.label.replace(/ \(.*\)/, '') ?? 'Other'
+  return CATALOGS.find((c) => !['all', 'messier', 'caldwell', 'h400'].includes(c.id) && c.test(o))?.label.replace(/ \(.*\)/, '') ?? 'Other'
 }
 
 export function searchCatalog(cat: CatObject[], q: string, limit = 12, filter = 'all'): CatObject[] {

@@ -15,15 +15,22 @@ const num = (v) => (v === '' || v === undefined ? null : Number(v))
 const pretty = (n) => n.replace(/^(NGC|IC)0*(\d+)(.*)$/, '$1 $2$3')
 
 const out = []
+const dups = []   // [duplicate id, primary id] from OpenNGC 'Dup' rows
 for (const f of ['NGC.csv', 'addendum.csv']) {
   const [head, ...rows] = readFileSync(new URL(f, dir), 'utf8').trim().split('\n')
   const cols = head.split(';')
   for (const line of rows) {
     const c = Object.fromEntries(line.split(';').map((v, i) => [cols[i], v]))
-    if (!c.RA || !c.Dec || c.Type === 'NonEx' || c.Type === 'Dup') continue
+    if (c.Type === 'Dup') {
+      const primary = c.NGC ? `NGC ${+c.NGC}` : c.IC ? `IC ${+c.IC}` : null
+      if (primary) dups.push([pretty(c.Name), primary])
+      continue
+    }
+    if (!c.RA || !c.Dec || c.Type === 'NonEx') continue
     const m = c.M ? `M ${Number(c.M)}` : null
     out.push({
       id: pretty(c.Name),
+      add: f === 'addendum.csv',
       m,
       type: c.Type,
       typeName: TYPES[c.Type] ?? c.Type,
@@ -83,8 +90,9 @@ for (const r of csv('vdb')) {
   const rad = Math.max(n(r.BRadMax) ?? 0, n(r.RRadMax) ?? 0)
   extra.push(mk(`vdB ${+r.VdB}`, 'RfN', +r._RA, +r._DE, rad * 2, undefined, { alt: [r.DM, +r.HD ? `HD ${+r.HD}` : ''].filter(Boolean) }))
 }
-for (const r of csv('barnard')) extra.push(mk(`B ${+r.Barn}`, 'DrkN', +r._RA_icrs, +r._DE_icrs, n(r.Diam)))
+for (const r of csv('barnard')) extra.push(mk(`B ${r.Barn.trim()}`, 'DrkN', +r._RA_icrs, +r._DE_icrs, n(r.Diam)))
 for (const r of csv('ldn')) {
+  if (!r.LDN) continue
   const d = n(r.Area) ? 2 * Math.sqrt(+r.Area / Math.PI) * 60 : null
   extra.push(mk(`LDN ${+r.LDN}`, 'DrkN', +r._RA_icrs, +r._DE_icrs, d, undefined, { alt: r.Barn ? [`B ${+r.Barn}`] : [] }))
 }
@@ -109,9 +117,29 @@ for (const r of csv('hickson')) extra.push(mk(`HCG ${+r.HCG}`, 'GGroup', +r._RA_
   }
   for (const [k, e] of arp) extra.push(mk(`Arp ${k}`, e.names.length > 1 ? 'GPair' : 'G', e.ra, e.dec, e.maj, e.min, { mag: e.mag, alt: e.names }))
 }
-for (const r of csv('clusters')) extra.push(mk(r.Cluster.replace(/\s+/g, ' '), 'OCl', +r.RAJ2000, +r.DEJ2000, n(r.Diam)))
+const clusterSeen = new Map()
+const addCluster = (id, ra, dec, maj) => {
+  const prev = clusterSeen.get(id)
+  if (prev) { prev.maj = Math.max(prev.maj ?? 0, maj ?? 0) || null; return }
+  const e = mk(id, 'OCl', ra, dec, maj)
+  clusterSeen.set(id, e); extra.push(e)
+}
+for (const r of csv('clusters')) addCluster(r.Cluster.replace(/\s+/g, ' '), +r.RAJ2000, +r.DEJ2000, n(r.Diam))
+const clusterAliases = []   // [catalog object id, alias]
+for (const [file, label] of [['collinder', 'Collinder'], ['melotte', 'Melotte']]) {
+  for (const r of csv(file)) {
+    const m = r.id.match(/^Cl (Collinder|Melotte)\s+(\d+)$/)
+    if (!m) continue
+    const id = `${label} ${+m[2]}`
+    const main = r.main_id.replace(/\s+/g, ' ')
+    if (/^(NGC|IC) \d+$/.test(main)) clusterAliases.push([main, id, `${label === 'Collinder' ? 'Cr' : 'Mel'} ${+m[2]}`])
+    else addCluster(id, +r.ra, +r.dec, n(r.galdim_majaxis))
+  }
+}
 for (const r of csv('abell')) {
-  const num = +r.main_id.match(/(\d+)\s*$/)[1]
+  const m = r.id.match(/^PN A66\s+(\d+)$/)
+  if (!m) continue
+  const num = +m[1]
   extra.push(mk(`Abell ${num}`, 'PN', +r.ra, +r.dec, n(r.galdim_majaxis), undefined, { alt: [`PN A66 ${num}`] }))
 }
 
@@ -138,6 +166,7 @@ for (const e of extra) {
   const tol = Math.max(3, 0.4 * (e.maj ?? 0))
   let best = null
   for (const o of out) {
+    if (o.add) continue
     if (!(e.type === 'OCl' ? o.type === 'OCl' || o.type === 'Cl+N' : e.type === 'PN' ? o.type === 'PN' : OLD_NEB.has(o.type))) continue
     if (Math.abs(o.dec - e.dec) * 60 > tol) continue
     const d = dist(e, o)
@@ -146,10 +175,63 @@ for (const e of extra) {
   if (best) { e.alt.push(best.o.id, ...(best.o.m ? [best.o.m] : [])); e.names.push(...best.o.names); matched++ }
 }
 out.push(...extra)
+
+// ---- clean-up ----
+const byId = new Map(out.map((o) => [o.id, o]))
+for (const [ngc, ...aliases] of clusterAliases) byId.get(ngc)?.alt.push(...aliases)
+
+// OpenNGC duplicates (e.g. NGC 2244 = NGC 2239) become searchable aliases of their primary object
+const primaryOf = new Map(dups)
+for (const [dup, primary] of dups) byId.get(primary)?.alt.push(dup)
+
+// Herschel 400 flag
+let h400 = 0
+for (const r of csv('herschel400')) {
+  const o = byId.get(`NGC ${+r.ngc}`) ?? byId.get(primaryOf.get(`NGC ${+r.ngc}`) ?? '')
+  if (o) { o.alt.push('H400', 'Herschel 400'); h400++ }
+}
+
+// addendum entries: merge into an existing canonical entry, or rename to a readable id
+const canon = (id) => {
+  let m
+  if ((m = id.match(/^B(\d+)$/))) return `B ${+m[1]}`
+  if ((m = id.match(/^C(\d+)$/))) return `Caldwell ${+m[1]}`
+  if ((m = id.match(/^Cl(\d+)$/))) return `Collinder ${+m[1]}`
+  if ((m = id.match(/^Mel(\d+)$/))) return `Melotte ${+m[1]}`
+  if ((m = id.match(/^HCG(\d+)$/))) return `HCG ${+m[1]}`
+  if ((m = id.match(/^(PGC|UGC|MWSC)0*(\d+)$/))) return `${m[1]} ${+m[2]}`
+  if ((m = id.match(/^H0*(\d+)$/))) return `Harvard ${+m[1]}`
+  if ((m = id.match(/^M0*(\d+)$/))) return `M ${+m[1]}`
+  return id
+}
+const drop = new Set()
+for (const o of out) {
+  if (!o.add) continue
+  const raw = o.id, id = canon(raw)
+  const tol = Math.max(5, 0.5 * (o.maj ?? 0))
+  const twin = out.find((x) => x !== o && !x.add && x.id === id) ??
+    (o.maj ? out.filter((x) => !x.add && x.type === o.type && (x.maj ?? 0) >= 0.3 * o.maj && dist(x, o) <= tol).sort((a, b) => dist(a, o) - dist(b, o))[0] : undefined)
+  if (twin) {
+    twin.names.push(...o.names); twin.alt.push(...o.alt)
+    if (o.m && !twin.m) twin.m = o.m
+    if (/^Caldwell /.test(id)) twin.alt.push(`C ${+id.split(' ')[1]}`, id)
+    twin.maj = Math.max(twin.maj ?? 0, o.maj ?? 0) || null
+    drop.add(o)
+  } else {
+    o.id = id
+    if (/^Caldwell /.test(id)) o.alt.push(`C ${+id.split(' ')[1]}`)
+  }
+}
+out.splice(0, out.length, ...out.filter((o) => !drop.has(o)))
+for (const o of out) delete o.add
+
+// verified sizes (arcmin) where the catalogs are badly off: the whole nebula, not just its cluster / brightest knot
+const SIZES = { 'NGC 7000': [120, 100], 'IC 1396': [170, 140], 'IC 1848': [150, 75], 'NGC 1909': [180, 60] }
+for (const o of out) if (SIZES[o.id]) [o.maj, o.min] = SIZES[o.id]
 for (const o of out) { o.names = [...new Set(o.names)]; o.alt = [...new Set(o.alt)].filter((a) => a !== o.id) }
 
 writeFileSync(new URL('../public/catalog.json', import.meta.url), JSON.stringify(out))
 const by = {}
 for (const o of out) { const k = o.m ? 'Messier' : o.id.match(/^[A-Za-z]+/)?.[0] ?? '?'; by[k] = (by[k] ?? 0) + 1 }
 for (const k of Object.keys(by)) if (by[k] < 20) delete by[k]
-console.log(`${out.length} objects (${matched} cross-identified)`, by)
+console.log(`${out.length} objects (${matched} cross-identified, ${h400} Herschel 400)`, by)

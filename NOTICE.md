@@ -10,3 +10,6 @@ Additional catalogs (data/raw, fetched by `app/scripts/fetch-catalogs.mjs`) come
 VizieR (van den Bergh VII/21, Barnard VII/220A, Lynds LDN VII/7A, Sharpless VII/20, Hickson VII/213,
 Rodgers-Campbell-Whiteoak VII/216, Arp VII/192, Dias open clusters B/ocl) and SIMBAD (Abell planetary nebulae).
 See https://cds.unistra.fr/ for their acknowledgement requirements.
+
+The Herschel 400 membership list (`data/raw/herschel400.csv`) was extracted from the Wikipedia article
+"Herschel 400 Catalogue" (CC-BY-SA 4.0). Collinder/Melotte designations come from SIMBAD and the Dias open cluster catalog.

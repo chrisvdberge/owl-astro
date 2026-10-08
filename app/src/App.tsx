@@ -38,6 +38,7 @@ export default function App() {
   const [searchFocus, setSearchFocus] = useState(false)
   const [target, setTarget] = useState<{ ra: number; dec: number; label: string; obj?: CatObject }>({ ra: 83.82, dec: -5.39, label: 'M 42', })
   const [presetId, setPresetId] = useState('seestar-s50-pro')
+  const [blocked, setBlocked] = useState<'scope' | 'camera'>('camera') // which list an all-in-one locks
   const [optics, setOptics] = useState<Optics>(PRESETS[0].optics)
   const [rotation, setRotation] = useState(0)
   const [survey, setSurvey] = useState('dss2')
@@ -68,6 +69,24 @@ export default function App() {
   const [panel, setPanel] = useState<'left' | 'right' | null>(null)
 
   const seeing = loc.seeing ?? 3
+  // all-in-one units (Seestar, Dwarf…) appear in both lists; choosing one fills both and locks the list that was not used
+  const AIO = PRESETS.filter((p) => p.id !== 'custom')
+  const aio = AIO.find((p) => p.id === presetId)
+  const near = (a: number, b: number) => Math.abs(a - b) < 1e-6
+  const scopeSel = aio?.id ?? SCOPES.find((t) => near(t.apertureMm, optics.apertureMm) && near(t.focalLengthMm, optics.focalLengthMm))?.id ?? ''
+  const cameraSel = aio?.id ?? CAMERAS.find((c) => near(c.sensorWmm, optics.sensorWmm) && near(c.sensorHmm, optics.sensorHmm) && near(c.pixelUm, optics.pixelUm))?.id ?? ''
+  function pickGear(side: 'scope' | 'camera', id: string) {
+    const unit = AIO.find((p) => p.id === id)
+    if (unit) { setPresetId(unit.id); setOptics(unit.optics); setBlocked(side === 'scope' ? 'camera' : 'scope'); return }
+    setPresetId('custom') // leaving an all-in-one unlocks both lists; the other part keeps its current values until changed
+    if (side === 'scope') {
+      const t = SCOPES.find((x) => x.id === id)
+      if (t) setOptics({ ...optics, apertureMm: t.apertureMm, focalLengthMm: t.focalLengthMm, reducer: 1 })
+    } else {
+      const c = CAMERAS.find((x) => x.id === id)
+      if (c) setOptics({ ...optics, sensorWmm: c.sensorWmm, sensorHmm: c.sensorHmm, pixelUm: c.pixelUm })
+    }
+  }
   // the account's default telescope + camera; the Seestar S50 Pro until the user picks another
   const defaultScope = store.settings.scope ?? { presetId: PRESETS[0].id, optics: PRESETS[0].optics }
   const scopeIsDefault = presetId === defaultScope.presetId && JSON.stringify(optics) === JSON.stringify(defaultScope.optics)
@@ -427,21 +446,21 @@ export default function App() {
       </section>
       <section>
         <h3>Optics</h3>
-        <label className="f"><span>Preset</span>
-          <select value={presetId} onChange={(e) => { setPresetId(e.target.value); setOptics(PRESETS.find((p) => p.id === e.target.value)!.optics) }}>
-            {PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-          </select>
-        </label>
         <label className="f"><span>Telescope / lens</span>
-          <select value="" onChange={(e) => { const t = SCOPES.find((x) => x.id === e.target.value); if (t) { setPresetId('custom'); setOptics({ ...optics, apertureMm: t.apertureMm, focalLengthMm: t.focalLengthMm, reducer: 1 }) } }}>
-            <option value="">Set optics from…</option>{SCOPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+          <select value={scopeSel} disabled={!!aio && blocked === 'scope'} onChange={(e) => pickGear('scope', e.target.value)}>
+            {!scopeSel && <option value="">Custom (edit below)</option>}
+            <optgroup label="All-in-one smart telescopes">{AIO.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}</optgroup>
+            <optgroup label="Telescopes & lenses">{SCOPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</optgroup>
           </select>
         </label>
         <label className="f"><span>Camera</span>
-          <select value="" onChange={(e) => { const c = CAMERAS.find((x) => x.id === e.target.value); if (c) { setPresetId('custom'); setOptics({ ...optics, sensorWmm: c.sensorWmm, sensorHmm: c.sensorHmm, pixelUm: c.pixelUm }) } }}>
-            <option value="">Set sensor from…</option>{CAMERAS.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+          <select value={cameraSel} disabled={!!aio && blocked === 'camera'} onChange={(e) => pickGear('camera', e.target.value)}>
+            {!cameraSel && <option value="">Custom (edit below)</option>}
+            <optgroup label="All-in-one smart telescopes">{AIO.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}</optgroup>
+            <optgroup label="Cameras">{CAMERAS.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</optgroup>
           </select>
         </label>
+        {aio && <small className="note">{aio.label} is one unit: telescope and camera go together. Pick something else in the {blocked === 'camera' ? 'telescope' : 'camera'} list to separate them.</small>}
         {num('apertureMm', 'Aperture mm')}{num('focalLengthMm', 'Focal length mm')}
         {num('sensorWmm', 'Sensor width mm')}{num('sensorHmm', 'Sensor height mm')}{num('pixelUm', 'Pixel µm')}
         <label className="f"><span>Binning</span>

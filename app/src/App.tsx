@@ -4,9 +4,9 @@ import { CATALOGS, catalogTag, customObject, isCustom, loadCatalog, searchCatalo
 import { PRESETS, compute, framingFit, mosaicPanels, type Optics } from './lib/optics'
 import { SURVEYS, defaultSurvey } from './lib/surveys'
 import * as Astronomy from 'astronomy-engine'
-import { sampleNight, separation, type Location } from './lib/astro'
+import { parallacticAngle, sampleNight, separation, targetAltAz, type Location } from './lib/astro'
 import { useStore, type Status } from './lib/store'
-import { tzFromCoords, tzOf, todayIn } from './lib/tz'
+import { clockIn, localNow, tzFromCoords, tzOf, zonedEpoch } from './lib/tz'
 import { useAuth } from './lib/auth'
 import Account from './components/Account'
 import HorizonEditor from './components/HorizonEditor'
@@ -23,6 +23,15 @@ const LOOK_KEY = 'astroplanner.look'
 const NEUTRAL = { brightness: 0, contrast: 0, saturation: 0, gamma: 1 }
 type Look = typeof NEUTRAL
 const loadLook = (): Look => { try { return { ...NEUTRAL, ...JSON.parse(localStorage.getItem(LOOK_KEY) ?? '{}') } } catch { return NEUTRAL } }
+/** Night + minutes after 17:00 for the current moment; by day, tonight at 22:00. */
+function nightNow(tz: string) {
+  const { date, minutes } = localNow(tz)
+  const [y, m, d] = date.split('-').map(Number)
+  const ymd = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+  if (minutes >= 17 * 60) return { night: date, tmin: minutes - 17 * 60 }
+  if (minutes < 8 * 60) return { night: ymd(new Date(y, m - 1, d - 1)), tmin: minutes + 7 * 60 }
+  return { night: date, tmin: 5 * 60 }
+}
 const hips = (id: string) => SURVEYS.find((s) => s.id === id)!.hips
 
 export default function App() {
@@ -51,7 +60,11 @@ export default function App() {
   const auth = useAuth()
   const store = useStore(auth.user?.id ?? null)
   const loc = store.active
-  const [night, setNight] = useState(() => todayIn(tzOf(loc)))
+  // the moment being viewed: a night (starting 17:00 site time) and minutes into it; defaults to right now / tonight at 22:00
+  const [{ night, tmin }, setMoment] = useState(() => nightNow(tzOf(loc)))
+  const setNight = (n: string) => setMoment((m) => ({ ...m, night: n }))
+  const setTmin = (t: number) => setMoment((m) => ({ ...m, tmin: t }))
+  const [mount, setMount] = useState<'altaz' | 'eq'>(() => { try { return localStorage.getItem('astroplanner.mount') === 'eq' ? 'eq' : 'altaz' } catch { return 'altaz' } })
   const minAlt = store.settings.minAlt
   const [view, setView] = useState<'sky' | 'planner'>('sky')
   const [hzOpen, setHzOpen] = useState(false)
@@ -67,6 +80,20 @@ export default function App() {
     const [y, m, d] = night.split('-').map(Number)
     return sampleNight(loc, target.ra, target.dec, new Date(y, m - 1, d), 10, minAlt)
   }, [loc, target.ra, target.dec, night, minAlt])
+
+  const when = useMemo(() => {
+    const [y, m, d] = night.split('-').map(Number)
+    return new Date(zonedEpoch(tzOf(loc), y, m, d, 17) + tmin * 60000)
+  }, [night, tmin, loc])
+  // alt-az: the sensor keeps the horizon level, so the frame's sky angle is the parallactic angle at that moment; EQ: the manual rotation
+  const pa = mount === 'altaz' ? parallacticAngle(loc, frame.ra, frame.dec, when) : rotation
+  const at = useMemo(() => targetAltAz(loc, target.ra, target.dec, when), [loc, target.ra, target.dec, when])
+  const sweep = useMemo(() => {
+    const u = samples.filter((x) => x.usable)
+    if (!u.length) return null
+    const q = (t: Date) => parallacticAngle(loc, frame.ra, frame.dec, t)
+    return { from: q(u[0].t), to: q(u[u.length - 1].t), peak: Math.max(...u.map((x) => x.alt)) }
+  }, [samples, loc, frame.ra, frame.dec])
 
   const patchLoc = (patch: Partial<Location>) => store.saveLocation({ ...loc, ...patch })
   function newLoc() {
@@ -126,12 +153,12 @@ export default function App() {
   useEffect(() => {
     if (!ready) return
     overlay.current.removeAll()
-    for (const corners of mosaicPanels(frame.ra, frame.dec, res.fovW, res.fovH, rotation, mosaic.cols, mosaic.rows)) overlay.current.add(A.polygon(corners, { color: frameSel ? '#fbbf24' : '#38bdf8', lineWidth: frameSel ? 3 : 2 }))
-  }, [ready, frame, res.fovW, res.fovH, rotation, mosaic, frameSel])
+    for (const corners of mosaicPanels(frame.ra, frame.dec, res.fovW, res.fovH, pa, mosaic.cols, mosaic.rows)) overlay.current.add(A.polygon(corners, { color: frameSel ? '#fbbf24' : '#38bdf8', lineWidth: frameSel ? 3 : 2 }))
+  }, [ready, frame, res.fovW, res.fovH, pa, mosaic, frameSel])
 
   // click the frame to select it, then drag it; unselected, the sky pans as usual
-  const live = useRef({ frame, fovW: res.fovW, fovH: res.fovH, rotation, mosaic, sel: frameSel })
-  useEffect(() => { live.current = { frame, fovW: res.fovW, fovH: res.fovH, rotation, mosaic, sel: frameSel } })
+  const live = useRef({ frame, fovW: res.fovW, fovH: res.fovH, rotation: pa, mosaic, sel: frameSel })
+  useEffect(() => { live.current = { frame, fovW: res.fovW, fovH: res.fovH, rotation: pa, mosaic, sel: frameSel } })
   useEffect(() => {
     const el = viewRef.current
     if (!el) return
@@ -239,7 +266,7 @@ export default function App() {
     const saved = fr?.find((f) => f.id === fid) ?? fr?.[0]
     setFrame({ ra: saved?.ra ?? t.ra, dec: saved?.dec ?? t.dec })
     if (saved) {
-      setRotation(saved.rotation); setMosaic({ cols: saved.cols, rows: saved.rows }); setSurvey(saved.survey)
+      setRotation(saved.rotation); setMount(saved.mount ?? 'eq'); if (saved.tmin !== undefined) setTmin(saved.tmin); setMosaic({ cols: saved.cols, rows: saved.rows }); setSurvey(saved.survey)
       if (saved.optics) { setOptics(saved.optics); setPresetId(saved.presetId ?? 'custom') }
     } else {
       const f = t.obj ? framingFit(t.obj.maj, t.obj.min, res.fovW, res.fovH) : null
@@ -319,7 +346,7 @@ export default function App() {
     if (obj.id !== target.obj?.id) setTarget({ ra: obj.ra, dec: obj.dec, label: nameOf(obj), obj })
     await new Promise((r) => setTimeout(r, 200)) // let the overlay redraw before the snapshot
     const data = {
-      rotation, cols: mosaic.cols, rows: mosaic.rows, survey, ra: c.ra, dec: c.dec,
+      rotation: Math.round(pa * 10) / 10, mount, tmin, cols: mosaic.cols, rows: mosaic.rows, survey, ra: c.ra, dec: c.dec,
       viewFov: aladin.current.getFov?.()[0], optics, presetId,
     }
     store.addWish(obj.id, { status, custom: customTarget })
@@ -382,8 +409,12 @@ export default function App() {
           <select value={optics.drizzle} onChange={(e) => { setPresetId('custom'); setOptics({ ...optics, drizzle: +e.target.value }) }}>{[1, 2, 3].map((b) => <option key={b} value={b}>{b}×</option>)}</select>
         </label>
         {num('reducer', 'Reducer / barlow ×')}
+        <label className="f"><span>Mount</span>
+          <select value={mount} onChange={(e) => { const m = e.target.value as 'altaz' | 'eq'; setMount(m); try { localStorage.setItem('astroplanner.mount', m) } catch { /* ignore */ } }}>
+            <option value="altaz">Alt-az (field rotates)</option><option value="eq">Equatorial (fixed angle)</option></select>
+        </label>
         <label className="f"><span>Rotation °</span>
-          <input type="range" min={-90} max={90} value={rotation} onChange={(e) => setRotation(+e.target.value)} /><em>{rotation}°</em>
+          <input type="range" min={-180} max={180} disabled={mount === 'altaz'} value={Math.round(pa)} onChange={(e) => setRotation(+e.target.value)} /><em>{Math.round(pa)}°</em>
         </label>
       </section>
       <section>
@@ -449,7 +480,14 @@ export default function App() {
         <h3>Night altitude</h3>
         <label className="f"><span>Night starting</span><input type="date" value={night} onChange={(e) => setNight(e.target.value)} /></label>
         <label className="f"><span>Min altitude °</span><input type="number" min={0} max={80} value={minAlt} onChange={(e) => store.setSettings({ minAlt: +e.target.value })} /></label>
-        <AltitudeChart samples={samples} loc={loc} minAlt={minAlt} />
+        <label className="f"><span>Time</span>
+          <input type="range" min={0} max={900} step={10} value={tmin} onChange={(e) => setTmin(+e.target.value)} /><em>{clockIn(tzOf(loc), when.getTime())}</em></label>
+        <div className="row"><button onClick={() => setMoment(nightNow(tzOf(loc)))}>Now</button>
+          <small className="note">{target.label} at {Math.round(at.alt)}° alt, {Math.round(at.az)}° az</small></div>
+        <AltitudeChart samples={samples} loc={loc} minAlt={minAlt} marker={tmin} onScrub={setTmin} />
+        {mount === 'altaz' && (
+          <p className="note">Alt-az field rotation: <b>{Math.round(pa)}°</b> now{sweep ? <> · sweeps {Math.round(sweep.from)}° → {Math.round(sweep.to)}° over the usable window{sweep.peak > 80 ? ' · ⚠ passes near the zenith, rotation is fast there' : ''}</> : ''}</p>
+        )}
       </section>
       <section>
         <h3>Target</h3>

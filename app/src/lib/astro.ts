@@ -59,6 +59,18 @@ function bodyAltAz(l: Location, body: Astronomy.Body, t: Date) {
 export const sunAlt = (l: Location, t: Date) => bodyAltAz(l, Astronomy.Body.Sun, t).alt
 export const moonAltAz = (l: Location, t: Date) => bodyAltAz(l, Astronomy.Body.Moon, t)
 
+/**
+ * Parallactic angle (deg, -180..180): position angle, east of north, of the direction to the zenith at an object.
+ * An alt-az mount keeps the sensor's "up" on the zenith, so this is the frame's rotation on the sky at that moment.
+ */
+export function parallacticAngle(l: Location, raDeg: number, decDeg: number, t: Date): number {
+  const d = Math.PI / 180
+  const lst = Astronomy.SiderealTime(t) + l.lon / 15 // hours
+  const H = (lst * 15 - raDeg) * d
+  const lat = l.lat * d, dec = decDeg * d
+  return Math.atan2(Math.sin(H), Math.tan(lat) * Math.cos(dec) - Math.sin(dec) * Math.cos(H)) / d
+}
+
 /** Moon illuminated fraction 0..1. */
 export const moonIllum = (t: Date) => Astronomy.Illumination(Astronomy.Body.Moon, t).phase_fraction
 

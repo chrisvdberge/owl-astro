@@ -96,3 +96,6 @@ header .tabs { margin-left: auto; } .acct + .tabs { margin-left: 0; }
 /* frame selection + drag */
 .view.overframe canvas { cursor: grab !important; } .view.dragging canvas { cursor: grabbing !important; }
 .fhint { position: fixed; z-index: 35; top: 56px; left: 50%; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--warn); color: var(--warn); border-radius: 8px; padding: 5px 12px; font-size: 12.5px; pointer-events: none; white-space: nowrap; }
+
+/* time marker on the altitude chart */
+.alt .now { stroke: var(--warn); stroke-width: 1.5; }

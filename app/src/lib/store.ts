@@ -10,6 +10,8 @@ export type Status = 'wishlist' | 'progress' | 'done'
 export interface FrameData {
   rotation: number; cols: number; rows: number; survey: string
   ra?: number; dec?: number; viewFov?: number; optics?: Optics; presetId?: string
+  /** 'altaz': rotation follows the parallactic angle at `tmin` (minutes after 17:00); absent on older saves, which are 'eq' */
+  mount?: 'altaz' | 'eq'; tmin?: number
 }
 /** A saved framing of a target; a target can have several (wide field, close crop, mosaic…). */
 export interface Framing extends FrameData { id: string; name: string; created: string; thumb?: string }

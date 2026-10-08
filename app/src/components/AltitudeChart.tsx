@@ -4,7 +4,7 @@ import { horizonAlt, moonIllum, type Location, type NightSample } from '../lib/a
 
 const W = 320, H = 190, PAD = { l: 26, r: 6, t: 8, b: 22 }
 
-export default function AltitudeChart({ samples, loc, minAlt, stepMin = 10 }: { samples: NightSample[]; loc: Location; minAlt: number; stepMin?: number }) {
+export default function AltitudeChart({ samples, loc, minAlt, stepMin = 10, marker, onScrub }: { samples: NightSample[]; loc: Location; minAlt: number; stepMin?: number; marker?: number; onScrub?: (minutes: number) => void }) {
   const n = samples.length - 1
   const x = (i: number) => PAD.l + (i / n) * (W - PAD.l - PAD.r)
   const y = (alt: number) => PAD.t + (1 - Math.max(0, alt) / 90) * (H - PAD.t - PAD.b)
@@ -17,9 +17,17 @@ export default function AltitudeChart({ samples, loc, minAlt, stepMin = 10 }: { 
   }, [samples, n, stepMin])
 
   const cw = (W - PAD.l - PAD.r) / n + 0.5
+  const scrub = (e: React.PointerEvent<SVGSVGElement>) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    const px = ((e.clientX - r.left) / r.width) * W
+    const i = Math.min(n, Math.max(0, Math.round(((px - PAD.l) / (W - PAD.l - PAD.r)) * n)))
+    onScrub?.(i * stepMin)
+  }
   return (
     <div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="alt">
+      <svg viewBox={`0 0 ${W} ${H}`} className="alt" style={onScrub ? { cursor: 'ew-resize', touchAction: 'none' } : undefined}
+        onPointerDown={(e) => { if (onScrub) { e.currentTarget.setPointerCapture(e.pointerId); scrub(e) } }}
+        onPointerMove={(e) => { if (onScrub && e.currentTarget.hasPointerCapture(e.pointerId)) scrub(e) }}>
         {samples.map((s, i) => (
           <rect key={i} x={x(i)} y={PAD.t} width={cw} height={H - PAD.t - PAD.b}
             className={s.sun < -18 ? 'night' : s.sun < -12 ? 'naut' : s.sun < -6 ? 'civ' : 'day'} />
@@ -30,6 +38,7 @@ export default function AltitudeChart({ samples, loc, minAlt, stepMin = 10 }: { 
         <polyline points={line((s) => s.moon)} className="moonl" />
         <polyline points={line((s) => s.alt)} className="tgtl" />
         {samples.map((s, i) => (s.usable ? <circle key={i} cx={x(i)} cy={y(s.alt)} r={1.8} className="ok" /> : null))}
+        {marker !== undefined && <line x1={x(marker / stepMin)} x2={x(marker / stepMin)} y1={PAD.t} y2={H - PAD.b} className="now" />}
       </svg>
       <p className="legend"><i className="k tgt" />Target <i className="k moon" />Moon <i className="k lim" />Min altitude / horizon <i className="k okd" />Usable</p>
       <dl>

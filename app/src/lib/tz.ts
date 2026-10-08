@@ -40,6 +40,18 @@ export function zonedEpoch(tz: string, y: number, m: number, d: number, hour: nu
 
 export const hourIn = (tz: string, ms: number) => parts(tz, ms).hour
 
+/** Wall-clock date (YYYY-MM-DD) and minutes since midnight at the site right now. */
+export function localNow(tz: string): { date: string; minutes: number } {
+  const p = parts(tz, Date.now())
+  return { date: `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`, minutes: p.hour * 60 + p.minute }
+}
+
+/** Clock time (HH:MM) at the site for an instant. */
+export function clockIn(tz: string, ms: number): string {
+  const p = parts(tz, ms)
+  return `${String(p.hour).padStart(2, '0')}:${String(p.minute).padStart(2, '0')}`
+}
+
 /** Today's calendar date at the site, as YYYY-MM-DD. */
 export function todayIn(tz: string): string {
   const p = parts(tz, Date.now())

@@ -92,3 +92,7 @@ header .tabs { margin-left: auto; } .acct + .tabs { margin-left: 0; }
 
 .fri { margin-top: 8px; } .fri .row { margin-top: 4px; align-items: center; } .fri .thumb { cursor: pointer; margin-top: 0; }
 .frs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; } .frs figure { margin: 0; cursor: pointer; } .frs figcaption { font-size: 11px; color: var(--mute); }
+
+/* frame selection + drag */
+.view.overframe canvas { cursor: grab !important; } .view.dragging canvas { cursor: grabbing !important; }
+.fhint { position: fixed; z-index: 35; top: 56px; left: 50%; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--warn); color: var(--warn); border-radius: 8px; padding: 5px 12px; font-size: 12.5px; pointer-events: none; white-space: nowrap; }

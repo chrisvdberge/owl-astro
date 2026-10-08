@@ -43,6 +43,7 @@ export default function App() {
   const [opacity, setOpacity] = useState(0.4)
   const [mosaic, setMosaic] = useState<{ cols: number; rows: number }>({ cols: 1, rows: 1 })
   const [frame, setFrame] = useState<{ ra: number; dec: number }>({ ra: 83.82, dec: -5.39 })
+  const [frameSel, setFrameSel] = useState(false)
   const [menu, setMenu] = useState<{ x: number; y: number; ra: number; dec: number } | null>(null)
   const [toast, setToast] = useState('')
   const [coordIn, setCoordIn] = useState('')
@@ -125,8 +126,89 @@ export default function App() {
   useEffect(() => {
     if (!ready) return
     overlay.current.removeAll()
-    for (const corners of mosaicPanels(frame.ra, frame.dec, res.fovW, res.fovH, rotation, mosaic.cols, mosaic.rows)) overlay.current.add(A.polygon(corners))
-  }, [ready, frame, res.fovW, res.fovH, rotation, mosaic])
+    for (const corners of mosaicPanels(frame.ra, frame.dec, res.fovW, res.fovH, rotation, mosaic.cols, mosaic.rows)) overlay.current.add(A.polygon(corners, { color: frameSel ? '#fbbf24' : '#38bdf8', lineWidth: frameSel ? 3 : 2 }))
+  }, [ready, frame, res.fovW, res.fovH, rotation, mosaic, frameSel])
+
+  // click the frame to select it, then drag it; unselected, the sky pans as usual
+  const live = useRef({ frame, fovW: res.fovW, fovH: res.fovH, rotation, mosaic, sel: frameSel })
+  useEffect(() => { live.current = { frame, fovW: res.fovW, fovH: res.fovH, rotation, mosaic, sel: frameSel } })
+  useEffect(() => {
+    const el = viewRef.current
+    if (!el) return
+    const local = (e: MouseEvent) => { const r = el.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top] as const }
+    /** 'edge' within a few px of an outline (the line is thin, so it gets a generous target), 'in' inside a panel, else null. */
+    const hit = (x: number, y: number): 'edge' | 'in' | null => {
+      const L = live.current
+      const EDGE = 8
+      let result: 'edge' | 'in' | null = null
+      try {
+        for (const poly of mosaicPanels(L.frame.ra, L.frame.dec, L.fovW, L.fovH, L.rotation, L.mosaic.cols, L.mosaic.rows)) {
+          const pts: number[][] = poly.map(([ra, dec]) => aladin.current.world2pix(ra, dec))
+          if (pts.some((p) => !p)) continue
+          let inPoly = false
+          for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+            const [xi, yi] = pts[i], [xj, yj] = pts[j]
+            if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inPoly = !inPoly
+            const dx = xj - xi, dy = yj - yi
+            const t = Math.max(0, Math.min(1, ((x - xi) * dx + (y - yi) * dy) / (dx * dx + dy * dy || 1)))
+            if (Math.hypot(x - (xi + t * dx), y - (yi + t * dy)) <= EDGE) return 'edge'
+          }
+          if (inPoly) result = 'in'
+        }
+      } catch { return null }
+      return result
+    }
+    let down: { x: number; y: number } | null = null
+    let grab: { dx: number; dy: number } | null = null
+    let moved = false
+    const onDown = (e: PointerEvent) => {
+      if (e.button !== 0) return
+      const [x, y] = local(e)
+      down = { x, y }; moved = false
+      const h = hit(x, y)
+      // a selected frame drags from anywhere on it; grabbing the outline of an unselected one selects and drags it in one go
+      if (h && (live.current.sel || h === 'edge')) {
+        if (!live.current.sel) { live.current.sel = true; setFrameSel(true) }
+        try {
+          const c = aladin.current.world2pix(live.current.frame.ra, live.current.frame.dec)
+          grab = { dx: x - c[0], dy: y - c[1] }
+          el.classList.add('dragging')
+          e.stopPropagation() // keep Aladin from panning the sky
+        } catch { grab = null }
+      }
+    }
+    // Aladin listens to mouse and touch events as well; block those for the duration of a frame drag
+    const block = (e: Event) => { if (grab) e.stopPropagation() }
+    const onMove = (e: PointerEvent) => {
+      const [x, y] = local(e)
+      if (down && Math.hypot(x - down.x, y - down.y) > 4) moved = true
+      if (grab) {
+        try {
+          const w = aladin.current.pix2world(x - grab.dx, y - grab.dy)
+          if (w) setFrame({ ra: w[0], dec: w[1] })
+        } catch { /* cursor left the projected sky */ }
+      } else if (!down) el.classList.toggle('overframe', hit(x, y) === 'edge' || (live.current.sel && hit(x, y) === 'in'))
+    }
+    const onUp = (e: PointerEvent) => {
+      if (e.button !== 0 || !down) return
+      const wasDrag = !!grab
+      if (!moved && !wasDrag) { const [x, y] = local(e); setFrameSel(hit(x, y) !== null) }
+      grab = null; down = null
+      el.classList.remove('dragging')
+    }
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setFrameSel(false)
+    const stoppers = ['mousedown', 'touchstart', 'mousemove', 'touchmove'] as const
+    el.addEventListener('pointerdown', onDown, true)
+    for (const t of stoppers) el.addEventListener(t, block, true)
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      el.removeEventListener('pointerdown', onDown, true)
+      for (const t of stoppers) el.removeEventListener(t, block, true)
+      window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); window.removeEventListener('keydown', onKey)
+    }
+  }, [])
 
   // right-click on the sky: offer to save the frame at that position
   useEffect(() => {
@@ -459,6 +541,7 @@ export default function App() {
         )
       })()}
       {menu && <div className="ctxbg" onMouseDown={() => setMenu(null)} onContextMenu={(e) => { e.preventDefault(); setMenu(null) }} />}
+      {frameSel && <div className="fhint">Frame selected — drag to move it · click elsewhere or Esc to release</div>}
       {toast && <div className="toast">{toast}</div>}
       <aside className={`r ${panel === 'right' ? 'open' : ''}`}>{right}</aside>
       {hzOpen && (

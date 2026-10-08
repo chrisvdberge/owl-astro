@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { CatObject } from '../lib/catalog'
 import type { useStore } from '../lib/store'
+import { tzOf, todayIn } from '../lib/tz'
 import { cloudAt, meanCloud, useCloud, type Cloud } from '../lib/weather'
 import { bestPeriods, defaultMoonTolerance, ephemeris, scoreNights, weekly, type EphemNight, type NightResult } from '../lib/suitability'
 
@@ -26,14 +27,15 @@ export default function Planner({ store, catalog, onShow }: { store: Store; cata
 
   const { cloud, error: wxError } = useCloud(loc)
   const byId = useMemo(() => new Map(catalog.map((o) => [o.id, o])), [catalog])
-  const start = useMemo(() => new Date(), [])
+  const tz = tzOf(loc)
+  const start = useMemo(() => { const [y, m, d] = todayIn(tz).split('-').map(Number); return new Date(y, m - 1, d) }, [tz])
 
   // sun/moon for the next year: heavy, so computed after first paint
   useEffect(() => {
     setNights(null)
     const h = setTimeout(() => setNights(ephemeris(loc, start, DAYS)), 30)
     return () => clearTimeout(h)
-  }, [loc.lat, loc.lon, loc.elevation]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loc.lat, loc.lon, loc.elevation, tz]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const items = useMemo(
     () => wishlist.map((w) => ({ w, o: byId.get(w.id) })).filter((x): x is { w: typeof x.w; o: CatObject } => !!x.o),

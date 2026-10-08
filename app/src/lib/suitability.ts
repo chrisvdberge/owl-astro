@@ -1,4 +1,5 @@
 import * as Astronomy from 'astronomy-engine'
+import { tzOf, zonedEpoch } from './tz'
 import { horizonAlt, moonIllum, separation, type Location } from './astro'
 
 export interface Settings { minAlt: number; minHours: number }
@@ -18,16 +19,17 @@ export interface EphemNight { date: Date; samples: EphemSample[]; illum: number 
 
 const cache = new Map<string, EphemNight[]>()
 
-/** Sun and moon for every night (17:00 → 08:00 local) of the next `days` days; shared by all targets of a location. */
+/** Sun and moon for every night (17:00 → 08:00 site time) of the next `days` days; shared by all targets of a location. */
 export function ephemeris(loc: Location, start: Date, days: number): EphemNight[] {
-  const key = `${loc.lat},${loc.lon},${loc.elevation},${start.toDateString()},${days}`
+  const tz = tzOf(loc)
+  const key = `${loc.lat},${loc.lon},${loc.elevation},${tz},${start.toDateString()},${days}`
   const hit = cache.get(key)
   if (hit) return hit
   const obs = new Astronomy.Observer(loc.lat, loc.lon, loc.elevation)
   const nights: EphemNight[] = []
   for (let d = 0; d < days; d++) {
     const day = new Date(start.getFullYear(), start.getMonth(), start.getDate() + d)
-    const t0 = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 17).getTime()
+    const t0 = zonedEpoch(tz, day.getFullYear(), day.getMonth() + 1, day.getDate(), 17)
     const samples: EphemSample[] = []
     for (let m = 0; m <= 15 * 60; m += STEP_MIN) {
       const t = new Date(t0 + m * 60000)

@@ -5,6 +5,7 @@ import { PRESETS, compute, framingFit, mosaicPanels, type Optics } from './lib/o
 import { SURVEYS, defaultSurvey } from './lib/surveys'
 import { sampleNight, type Location } from './lib/astro'
 import { useStore } from './lib/store'
+import { tzFromCoords, tzOf, todayIn } from './lib/tz'
 import { useAuth } from './lib/auth'
 import Account from './components/Account'
 import HorizonEditor from './components/HorizonEditor'
@@ -39,7 +40,7 @@ export default function App() {
   const auth = useAuth()
   const store = useStore(auth.user?.id ?? null)
   const loc = store.active
-  const [night, setNight] = useState(() => new Date().toISOString().slice(0, 10))
+  const [night, setNight] = useState(() => todayIn(tzOf(loc)))
   const minAlt = store.settings.minAlt
   const [view, setView] = useState<'sky' | 'planner'>('sky')
   const [hzOpen, setHzOpen] = useState(false)
@@ -62,7 +63,7 @@ export default function App() {
     if (name) store.saveLocation({ ...loc, id: crypto.randomUUID(), name, horizon: [] })
   }
   function here() {
-    navigator.geolocation?.getCurrentPosition((p) => patchLoc({ lat: +p.coords.latitude.toFixed(4), lon: +p.coords.longitude.toFixed(4), elevation: Math.round(p.coords.altitude ?? loc.elevation) }))
+    navigator.geolocation?.getCurrentPosition((p) => patchLoc({ lat: +p.coords.latitude.toFixed(4), lon: +p.coords.longitude.toFixed(4), tz: tzFromCoords(p.coords.latitude, p.coords.longitude) ?? loc.tz, elevation: Math.round(p.coords.altitude ?? loc.elevation) }))
   }
 
   useEffect(() => { loadCatalog().then(setCatalog) }, [])
@@ -204,8 +205,9 @@ export default function App() {
           <select value={loc.id} onChange={(e) => store.setActive(e.target.value)}>{store.locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select>
         </label>
         <label className="f"><span>Name</span><input value={loc.name} onChange={(e) => patchLoc({ name: e.target.value })} /></label>
-        <label className="f"><span>Latitude °N</span><input type="number" step="0.0001" value={loc.lat} onChange={(e) => patchLoc({ lat: +e.target.value })} /></label>
-        <label className="f"><span>Longitude °E</span><input type="number" step="0.0001" value={loc.lon} onChange={(e) => patchLoc({ lon: +e.target.value })} /></label>
+        <label className="f"><span>Latitude °N</span><input type="number" step="0.0001" value={loc.lat} onChange={(e) => patchLoc({ lat: +e.target.value, tz: tzFromCoords(+e.target.value, loc.lon) ?? loc.tz })} /></label>
+        <label className="f"><span>Longitude °E</span><input type="number" step="0.0001" value={loc.lon} onChange={(e) => patchLoc({ lon: +e.target.value, tz: tzFromCoords(loc.lat, +e.target.value) ?? loc.tz })} /></label>
+        <label className="f"><span>Time zone</span><input value={loc.tz ?? tzOf(loc)} onChange={(e) => patchLoc({ tz: e.target.value })} /></label>
         <label className="f"><span>Elevation m</span><input type="number" value={loc.elevation} onChange={(e) => patchLoc({ elevation: +e.target.value })} /></label>
         <div className="row">
           <button onClick={here}>📍 Here</button><button onClick={newLoc}>+ New</button>

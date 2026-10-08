@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { tzOf, hourIn } from '../lib/tz'
 import { horizonAlt, moonIllum, type Location, type NightSample } from '../lib/astro'
 
 const W = 320, H = 190, PAD = { l: 26, r: 6, t: 8, b: 22 }
@@ -24,7 +25,7 @@ export default function AltitudeChart({ samples, loc, minAlt, stepMin = 10 }: { 
             className={s.sun < -18 ? 'night' : s.sun < -12 ? 'naut' : s.sun < -6 ? 'civ' : 'day'} />
         ))}
         {[0, 30, 60, 90].map((a) => (<g key={a}><line x1={PAD.l} x2={W - PAD.r} y1={y(a)} y2={y(a)} className="grid" /><text x={PAD.l - 4} y={y(a) + 3} textAnchor="end">{a}°</text></g>))}
-        {samples.map((s, i) => (i % 12 === 0 ? <text key={i} x={x(i)} y={H - 7} textAnchor="middle">{String(s.t.getHours()).padStart(2, '0')}h</text> : null))}
+        {samples.map((s, i) => (i % 12 === 0 ? <text key={i} x={x(i)} y={H - 7} textAnchor="middle">{String(hourIn(tzOf(loc), s.t.getTime())).padStart(2, '0')}h</text> : null))}
         <polyline points={samples.map((s, i) => `${x(i)},${y(Math.max(minAlt, horizonAlt(loc.horizon, s.az)))}`).join(' ')} className="limit" />
         <polyline points={line((s) => s.moon)} className="moonl" />
         <polyline points={line((s) => s.alt)} className="tgtl" />

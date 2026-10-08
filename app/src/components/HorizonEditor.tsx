@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { horizonAlt, parseHorizonFile, type HorizonPoint } from '../lib/astro'
+import { horizonAlt, horizonToText, parseHorizonFile, type HorizonPoint } from '../lib/astro'
 
 const W = 720, H = 240, MAXALT = 60, PAD = { l: 34, r: 10, t: 10, b: 24 }
 const x = (az: number) => PAD.l + (az / 360) * (W - PAD.l - PAD.r)
@@ -8,6 +8,8 @@ const y = (alt: number) => PAD.t + (1 - alt / MAXALT) * (H - PAD.t - PAD.b)
 export default function HorizonEditor({ points, onChange }: { points: HorizonPoint[]; onChange: (p: HorizonPoint[]) => void }) {
   const svg = useRef<SVGSVGElement>(null)
   const [drag, setDrag] = useState<number | null>(null)
+  const [southZero, setSouthZero] = useState(false)
+  const [msg, setMsg] = useState('')
 
   const toData = (e: React.PointerEvent): HorizonPoint => {
     const r = svg.current!.getBoundingClientRect()
@@ -44,8 +46,19 @@ export default function HorizonEditor({ points, onChange }: { points: HorizonPoi
       <div className="row">
         <button onClick={() => onChange([])}>Clear (flat horizon)</button>
         <label className="filebtn">Import file<input type="file" accept=".hzn,.txt,.csv,.hor" hidden
-          onChange={async (e) => { const f = e.target.files?.[0]; if (f) { const p = parseHorizonFile(await f.text()); if (p.length) onChange(p) } e.target.value = '' }} /></label>
+          onChange={async (e) => {
+            const f = e.target.files?.[0]
+            if (f) { const p = parseHorizonFile(await f.text(), { southZero }); if (p.length) { onChange(p); setMsg(`Imported ${p.length} points`) } else setMsg('No "azimuth altitude" lines found in that file') }
+            e.target.value = ''
+          }} /></label>
+        <button disabled={!points.length} onClick={() => {
+          const a = document.createElement('a')
+          a.href = URL.createObjectURL(new Blob([horizonToText(points)], { type: 'text/plain' }))
+          a.download = 'horizon.txt'; a.click(); URL.revokeObjectURL(a.href)
+        }}>Export</button>
+        <label className="note"><input type="checkbox" checked={southZero} onChange={(e) => setSouthZero(e.target.checked)} /> file counts azimuth from South</label>
       </div>
+      {msg && <p className="note">{msg}</p>}
     </div>
   )
 }

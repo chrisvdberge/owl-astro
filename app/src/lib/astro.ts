@@ -1,4 +1,5 @@
 import * as Astronomy from 'astronomy-engine'
+import { tzOf, zonedEpoch } from './tz'
 
 export type HorizonPoint = [az: number, alt: number]
 
@@ -10,6 +11,7 @@ export interface Location {
   elevation: number
   horizon: HorizonPoint[] // sorted by azimuth; empty = flat horizon
   seeing?: number // typical seeing in arcsec at this site (default 3)
+  tz?: string // IANA time zone of the site (default: browser zone)
 }
 
 /** Gaps wider than this between two points are open sky: the horizon ramps down to 0° beside each point. */
@@ -69,9 +71,9 @@ export function separation(ra1: number, dec1: number, ra2: number, dec2: number)
 
 export interface NightSample { t: Date; alt: number; az: number; sun: number; moon: number; usable: boolean }
 
-/** Samples a night from 17:00 local on `day` to 08:00 the next day, every `stepMin` minutes. */
+/** Samples a night from 17:00 site time on `day` (its y/m/d fields) to 08:00 the next day, every `stepMin` minutes. */
 export function sampleNight(l: Location, ra: number, dec: number, day: Date, stepMin = 10, minAlt = 25): NightSample[] {
-  const start = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 17, 0, 0)
+  const start = new Date(zonedEpoch(tzOf(l), day.getFullYear(), day.getMonth() + 1, day.getDate(), 17))
   const out: NightSample[] = []
   for (let m = 0; m <= 15 * 60; m += stepMin) {
     const t = new Date(start.getTime() + m * 60000)
@@ -84,11 +86,42 @@ export function sampleNight(l: Location, ra: number, dec: number, day: Date, ste
   return out
 }
 
-export function parseHorizonFile(text: string): HorizonPoint[] {
-  const pts: HorizonPoint[] = []
+/**
+ * Parses "azimuth altitude" lines (N.I.N.A. .hzn, Stellarium horizon lists, CSV). Lines starting with # ; // or text are skipped.
+ * `southZero`: azimuths are counted from the south instead of the north.
+ */
+export function parseHorizonFile(text: string, opts: { southZero?: boolean } = {}): HorizonPoint[] {
+  const byAz = new Map<number, number>()
   for (const line of text.split(/\r?\n/)) {
-    const m = line.trim().match(/^(-?\d+(?:\.\d+)?)[\s,;]+(-?\d+(?:\.\d+)?)/)
-    if (m) pts.push([((+m[1] % 360) + 360) % 360, Math.max(0, +m[2])])
+    const t = line.trim()
+    if (!t || /^(#|;|\/\/)/.test(t)) continue
+    const m = t.match(/^(-?\d+(?:\.\d+)?)[\s,;]+(-?\d+(?:\.\d+)?)/)
+    if (!m) continue
+    let az = +m[1] + (opts.southZero ? 180 : 0)
+    az = Math.round((((az % 360) + 360) % 360) * 10) / 10
+    byAz.set(az, Math.max(0, Math.round(+m[2] * 10) / 10))
   }
-  return pts.sort((a, b) => a[0] - b[0])
+  return thinHorizon([...byAz.entries()].sort((a, b) => a[0] - b[0]) as HorizonPoint[])
 }
+
+/** Ramer–Douglas–Peucker: drops points within `tol` degrees of the simplified line, loosening tol until at most `max` remain. */
+export function thinHorizon(pts: HorizonPoint[], tol = 0.5, max = 120): HorizonPoint[] {
+  if (pts.length <= max) return pts
+  const simplify = (p: HorizonPoint[], eps: number): HorizonPoint[] => {
+    if (p.length <= 2) return p
+    const [a0, v0] = p[0], [a1, v1] = p[p.length - 1]
+    let worst = -1, at = 0
+    for (let i = 1; i < p.length - 1; i++) {
+      const interp = a1 === a0 ? v0 : v0 + ((v1 - v0) * (p[i][0] - a0)) / (a1 - a0)
+      const err = Math.abs(interp - p[i][1])
+      if (err > worst) { worst = err; at = i }
+    }
+    if (worst <= eps) return [p[0], p[p.length - 1]]
+    return [...simplify(p.slice(0, at + 1), eps).slice(0, -1), ...simplify(p.slice(at), eps)]
+  }
+  let out = simplify(pts, tol)
+  for (let t = tol * 1.5; out.length > max; t *= 1.5) out = simplify(pts, t)
+  return out
+}
+
+export const horizonToText = (pts: HorizonPoint[]) => `# azimuth(deg, N=0 E=90) altitude(deg)\n${pts.map(([a, v]) => `${a} ${v}`).join('\n')}\n`

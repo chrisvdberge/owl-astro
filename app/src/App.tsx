@@ -607,7 +607,7 @@ export default function App() {
   return (
     <div className={`app ${view === 'planner' ? 'pv' : ''}`}>
       <header>
-        <b>Astroplanner</b>
+        <b className="brand"><img src="/favicon.svg" alt="" width={26} height={26} />Owl Astro</b>
         <span className="nav">
           <button className={view === 'sky' ? 'on' : ''} onClick={() => setView('sky')}>Sky</button>
           <button className={view === 'planner' ? 'on' : ''} onClick={() => { setView('planner'); setFrameSel(false); setMenu(null) }}>Planner{store.wishlist.length ? ` (${store.wishlist.length})` : ''}</button>

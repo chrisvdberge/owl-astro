@@ -1,4 +1,4 @@
-# Astroplanner — requirements (v1)
+# Owl Astro — requirements (v1)
 
 Personal astrophotography planner. Single user to start, but data model and auth are multi-user ready.
 Reference: stellarnomads.com telescope FOV calculator (survey background + FOV overlay + results panel).

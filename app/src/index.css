@@ -5,6 +5,8 @@ body { background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, sans-s
 .app { display: grid; grid-template-columns: 290px 1fr 300px; grid-template-rows: 44px 1fr; height: 100%; }
 header { grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 0 14px; background: var(--panel); border-bottom: 1px solid var(--line); }
 header .tgt { color: var(--mute); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+header .brand { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+header .brand img { display: block; border-radius: 6px; }
 header .tabs { margin-left: auto; display: none; gap: 6px; }
 aside { overflow-y: auto; background: var(--panel); padding: 4px 14px 24px; }
 aside.l { border-right: 1px solid var(--line); } aside.r { border-left: 1px solid var(--line); }

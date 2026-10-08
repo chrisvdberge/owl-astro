@@ -12,6 +12,8 @@ export interface FrameData {
   ra?: number; dec?: number; viewFov?: number; optics?: Optics; presetId?: string
   /** 'altaz': rotation follows the parallactic angle at `tmin` (minutes after 17:00); absent on older saves, which are 'eq' */
   mount?: 'altaz' | 'eq'; tmin?: number
+  /** planned session window, minutes after 17:00 (alt-az); absent = the target's usable window */
+  sess?: [number, number]
 }
 /** A saved framing of a target; a target can have several (wide field, close crop, mosaic…). */
 export interface Framing extends FrameData { id: string; name: string; created: string; thumb?: string }

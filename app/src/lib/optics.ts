@@ -93,3 +93,28 @@ export function framingFit(majArcmin: number | null, minArcmin: number | null, f
   const rows = Math.max(1, Math.ceil((min - fovH * 0.2) / (fovH * 0.8)))
   return { kind: cols * rows > 1 ? 'mosaic' : 'fits', cols, rows, ratio }
 }
+
+/**
+ * What an alt-az session leaves you with. Every sub-frame is the same rectangle turned about the frame centre by that
+ * moment's field angle; the stack is only complete where all of them overlap. Returns the largest centred rectangle of
+ * the sensor's aspect ratio, oriented at the middle of the angle range, that fits inside every frame.
+ * Angles are position angles in degrees; a rectangle repeats every 180 degrees, so they are unwrapped modulo 180.
+ */
+export function sessionCrop(fovW: number, fovH: number, angles: number[]) {
+  if (!angles.length) return null
+  const un: number[] = []
+  for (const a of angles) {
+    let v = a
+    if (un.length) { const p = un[un.length - 1]; while (v - p > 90) v -= 180; while (v - p < -90) v += 180 }
+    un.push(v)
+  }
+  const lo = Math.min(...un), hi = Math.max(...un)
+  const ref = (lo + hi) / 2
+  const r = Math.PI / 180
+  let scale = 1
+  for (const a of un) {
+    const c = Math.abs(Math.cos((a - ref) * r)), s = Math.abs(Math.sin((a - ref) * r))
+    scale = Math.min(scale, fovW / (fovW * c + fovH * s), fovH / (fovW * s + fovH * c))
+  }
+  return { ref, spread: hi - lo, scale, w: fovW * scale, h: fovH * scale }
+}

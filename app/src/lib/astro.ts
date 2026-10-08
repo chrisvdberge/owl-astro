@@ -64,10 +64,16 @@ export const moonAltAz = (l: Location, t: Date) => bodyAltAz(l, Astronomy.Body.M
  * An alt-az mount keeps the sensor's "up" on the zenith, so this is the frame's rotation on the sky at that moment.
  */
 export function parallacticAngle(l: Location, raDeg: number, decDeg: number, t: Date): number {
+  return parallacticFromLst(l.lat, lstHours(l, t), raDeg, decDeg)
+}
+
+/** Local sidereal time in hours; the costly part of a parallactic angle, so callers with many targets/frames can reuse it. */
+export const lstHours = (l: Location, t: Date) => Astronomy.SiderealTime(t) + l.lon / 15
+
+export function parallacticFromLst(latDeg: number, lst: number, raDeg: number, decDeg: number): number {
   const d = Math.PI / 180
-  const lst = Astronomy.SiderealTime(t) + l.lon / 15 // hours
   const H = (lst * 15 - raDeg) * d
-  const lat = l.lat * d, dec = decDeg * d
+  const lat = latDeg * d, dec = decDeg * d
   return Math.atan2(Math.sin(H), Math.tan(lat) * Math.cos(dec) - Math.sin(dec) * Math.cos(H)) / d
 }
 

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import A from 'aladin-lite'
 import { CATALOGS, catalogTag, customObject, isCustom, loadCatalog, searchCatalog, sexa, type CatObject, type CustomTarget } from './lib/catalog'
-import { PRESETS, compute, framingFit, mosaicPanels, type Optics } from './lib/optics'
+import { PRESETS, compute, framingFit, mosaicPanels, rectCorners, sessionCrop, type Optics } from './lib/optics'
 import { SURVEYS, defaultSurvey } from './lib/surveys'
 import * as Astronomy from 'astronomy-engine'
-import { parallacticAngle, sampleNight, separation, targetAltAz, type Location } from './lib/astro'
+import { lstHours, parallacticAngle, parallacticFromLst, sampleNight, separation, targetAltAz, type Location } from './lib/astro'
 import { useStore, type Status } from './lib/store'
 import { clockIn, localNow, tzFromCoords, tzOf, zonedEpoch } from './lib/tz'
 import { useAuth } from './lib/auth'
@@ -53,6 +53,8 @@ export default function App() {
   const [mosaic, setMosaic] = useState<{ cols: number; rows: number }>({ cols: 1, rows: 1 })
   const [frame, setFrame] = useState<{ ra: number; dec: number }>({ ra: 83.82, dec: -5.39 })
   const [frameSel, setFrameSel] = useState(false)
+  const [plan, setPlan] = useState(false)
+  const [sess, setSess] = useState<[number, number] | null>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; ra: number; dec: number } | null>(null)
   const [toast, setToast] = useState('')
   const [coordIn, setCoordIn] = useState('')
@@ -81,13 +83,31 @@ export default function App() {
     return sampleNight(loc, target.ra, target.dec, new Date(y, m - 1, d), 10, minAlt)
   }, [loc, target.ra, target.dec, night, minAlt])
 
-  const when = useMemo(() => {
+  const base = useMemo(() => {
     const [y, m, d] = night.split('-').map(Number)
-    return new Date(zonedEpoch(tzOf(loc), y, m, d, 17) + tmin * 60000)
-  }, [night, tmin, loc])
+    return zonedEpoch(tzOf(loc), y, m, d, 17)
+  }, [night, loc])
+  const when = useMemo(() => new Date(base + tmin * 60000), [base, tmin])
   // alt-az: the sensor keeps the horizon level, so the frame's sky angle is the parallactic angle at that moment; EQ: the manual rotation
   const pa = mount === 'altaz' ? parallacticAngle(loc, frame.ra, frame.dec, when) : rotation
   const at = useMemo(() => targetAltAz(loc, target.ra, target.dec, when), [loc, target.ra, target.dec, when])
+  // session plan (alt-az): the frame turned to every moment of the session, and the crop that survives them all
+  const usableRange = useMemo<[number, number] | null>(() => {
+    const first = samples.findIndex((x) => x.usable)
+    if (first < 0) return null
+    return [first * 10, samples.findLastIndex((x) => x.usable) * 10]
+  }, [samples])
+  const range: [number, number] = sess ?? usableRange ?? [tmin, tmin]
+  const session = useMemo(() => {
+    if (mount !== 'altaz') return null
+    const lo = Math.min(...range), hi = Math.max(...range)
+    const mins: number[] = []
+    for (let m = lo; m <= hi; m += 10) mins.push(m)
+    const angles = mins.map((m) => parallacticFromLst(loc.lat, lstHours(loc, new Date(base + m * 60000)), frame.ra, frame.dec))
+    const ghostIdx = [...new Set(Array.from({ length: Math.min(8, mins.length) }, (_, i) => Math.round((i * (mins.length - 1)) / Math.max(1, Math.min(8, mins.length) - 1))))]
+    const crop = mosaic.cols * mosaic.rows === 1 ? sessionCrop(res.fovW, res.fovH, angles) : null
+    return { lo, hi, ghosts: ghostIdx.map((i) => ({ min: mins[i], angle: angles[i] })), crop, angles }
+  }, [mount, range[0], range[1], loc, base, frame.ra, frame.dec, mosaic.cols, mosaic.rows, res.fovW, res.fovH]) // eslint-disable-line react-hooks/exhaustive-deps
   const sweep = useMemo(() => {
     const u = samples.filter((x) => x.usable)
     if (!u.length) return null
@@ -153,8 +173,16 @@ export default function App() {
   useEffect(() => {
     if (!ready) return
     overlay.current.removeAll()
+    if (plan && session) {
+      const g = session.ghosts
+      g.forEach((x, i) => {
+        const color = `hsl(${Math.round(270 - (g.length > 1 ? (i / (g.length - 1)) * 240 : 0))} 80% 65%)`
+        for (const corners of mosaicPanels(frame.ra, frame.dec, res.fovW, res.fovH, x.angle, mosaic.cols, mosaic.rows)) overlay.current.add(A.polygon(corners, { color, lineWidth: 1 }))
+      })
+      if (session.crop) overlay.current.add(A.polygon(rectCorners(frame.ra, frame.dec, session.crop.w, session.crop.h, session.crop.ref), { color: '#4ade80', lineWidth: 3 }))
+    }
     for (const corners of mosaicPanels(frame.ra, frame.dec, res.fovW, res.fovH, pa, mosaic.cols, mosaic.rows)) overlay.current.add(A.polygon(corners, { color: frameSel ? '#fbbf24' : '#38bdf8', lineWidth: frameSel ? 3 : 2 }))
-  }, [ready, frame, res.fovW, res.fovH, pa, mosaic, frameSel])
+  }, [ready, frame, res.fovW, res.fovH, pa, mosaic, frameSel, plan, session])
 
   // click the frame to select it, then drag it; unselected, the sky pans as usual
   const live = useRef({ frame, fovW: res.fovW, fovH: res.fovH, rotation: pa, mosaic, sel: frameSel })
@@ -266,7 +294,7 @@ export default function App() {
     const saved = fr?.find((f) => f.id === fid) ?? fr?.[0]
     setFrame({ ra: saved?.ra ?? t.ra, dec: saved?.dec ?? t.dec })
     if (saved) {
-      setRotation(saved.rotation); setMount(saved.mount ?? 'eq'); if (saved.tmin !== undefined) setTmin(saved.tmin); setMosaic({ cols: saved.cols, rows: saved.rows }); setSurvey(saved.survey)
+      setRotation(saved.rotation); setMount(saved.mount ?? 'eq'); if (saved.tmin !== undefined) setTmin(saved.tmin); setSess(saved.sess ?? null); setMosaic({ cols: saved.cols, rows: saved.rows }); setSurvey(saved.survey)
       if (saved.optics) { setOptics(saved.optics); setPresetId(saved.presetId ?? 'custom') }
     } else {
       const f = t.obj ? framingFit(t.obj.maj, t.obj.min, res.fovW, res.fovH) : null
@@ -346,7 +374,7 @@ export default function App() {
     if (obj.id !== target.obj?.id) setTarget({ ra: obj.ra, dec: obj.dec, label: nameOf(obj), obj })
     await new Promise((r) => setTimeout(r, 200)) // let the overlay redraw before the snapshot
     const data = {
-      rotation: Math.round(pa * 10) / 10, mount, tmin, cols: mosaic.cols, rows: mosaic.rows, survey, ra: c.ra, dec: c.dec,
+      rotation: Math.round(pa * 10) / 10, mount, tmin, sess: sess ?? undefined, cols: mosaic.cols, rows: mosaic.rows, survey, ra: c.ra, dec: c.dec,
       viewFov: aladin.current.getFov?.()[0], optics, presetId,
     }
     store.addWish(obj.id, { status, custom: customTarget })
@@ -487,6 +515,29 @@ export default function App() {
         <AltitudeChart samples={samples} loc={loc} minAlt={minAlt} marker={tmin} onScrub={setTmin} />
         {mount === 'altaz' && (
           <p className="note">Alt-az field rotation: <b>{Math.round(pa)}°</b> now{sweep ? <> · sweeps {Math.round(sweep.from)}° → {Math.round(sweep.to)}° over the usable window{sweep.peak > 80 ? ' · ⚠ passes near the zenith, rotation is fast there' : ''}</> : ''}</p>
+        )}
+      </section>
+      <section>
+        <h3>Session plan</h3>
+        {mount !== 'altaz' ? <p className="note">An equatorial mount keeps the field fixed: nothing to crop.</p> : (
+          <>
+            <label className="note"><input type="checkbox" checked={plan} onChange={(e) => setPlan(e.target.checked)} /> Show the frame over the session</label>
+            <label className="f"><span>Start</span><input type="range" min={0} max={900} step={10} value={range[0]} onChange={(e) => setSess([+e.target.value, range[1]])} /><em>{clockIn(tzOf(loc), base + range[0] * 60000)}</em></label>
+            <label className="f"><span>End</span><input type="range" min={0} max={900} step={10} value={range[1]} onChange={(e) => setSess([range[0], +e.target.value])} /><em>{clockIn(tzOf(loc), base + range[1] * 60000)}</em></label>
+            <div className="row wrap">
+              <button disabled={!sess} onClick={() => setSess(null)} title="Use the time the target is above the minimum altitude and the sun is below −12°">Use usable window</button>
+              <button onClick={() => setSess([tmin, range[1] < tmin ? tmin : range[1]])} title="Start the session at the time shown on the Time slider">Start = now</button>
+            </div>
+            {session && (
+              <p className="note">
+                {Math.abs(range[1] - range[0]) / 60 >= 0.1 ? `${(Math.abs(range[1] - range[0]) / 60).toFixed(1)} h` : 'Instant'} · field turns <b>{Math.abs(Math.max(...session.angles) - Math.min(...session.angles)).toFixed(0)}°</b>
+                {session.crop ? (
+                  <> → crop to <b>{(session.crop.w * 60).toFixed(0)}′ × {(session.crop.h * 60).toFixed(0)}′</b> (keeps {Math.round(session.crop.scale * 100)}% of each side, {Math.round(session.crop.scale ** 2 * 100)}% of the area), tilted {session.crop.ref.toFixed(0)}° on the sky</>
+                ) : <> · crop is worked out for single frames only</>}
+              </p>
+            )}
+            {plan && <p className="note">Violet = start of session, orange = end; green = what every frame covers.</p>}
+          </>
         )}
       </section>
       <section>

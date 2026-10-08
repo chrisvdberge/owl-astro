@@ -60,6 +60,8 @@ export const CAMERAS: Camera[] = [
 /** Common imaging scopes and lenses: choosing one fills in aperture and focal length (nominal, no reducer). */
 export interface Scope { id: string; label: string; apertureMm: number; focalLengthMm: number }
 export const SCOPES: Scope[] = [
+  { id: 'newton-200', label: 'Newton 200/1000 (f/5)', apertureMm: 200, focalLengthMm: 1000 },
+  { id: 'ts-quad-80', label: 'TS-Optics Quadruplet 80/480 (f/6)', apertureMm: 80, focalLengthMm: 480 },
   { id: 'wo-redcat51', label: 'William Optics RedCat 51 (250 mm f/4.9)', apertureMm: 51, focalLengthMm: 250 },
   { id: 'askar-fra400', label: 'Askar FRA400 (400 mm f/5.6)', apertureMm: 72, focalLengthMm: 400 },
   { id: 'sw-evostar72ed', label: 'Sky-Watcher Evostar 72ED (420 mm f/5.8)', apertureMm: 72, focalLengthMm: 420 },

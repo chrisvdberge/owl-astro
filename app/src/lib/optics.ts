@@ -19,6 +19,12 @@ export const PRESETS: Preset[] = [
     optics: { apertureMm: 50, focalLengthMm: 260, sensorWmm: 11.136, sensorHmm: 6.264, pixelUm: 2.9, binning: 1, drizzle: 1, reducer: 1 },
   },
   {
+    id: 'dwarf-mini',
+    label: 'Dwarf Mini (telephoto)',
+    // Sony IMX662 1920x1080 @ 2.9 µm (5.568 x 3.132 mm), 150 mm f/5, 30 mm aperture
+    optics: { apertureMm: 30, focalLengthMm: 150, sensorWmm: 5.568, sensorHmm: 3.132, pixelUm: 2.9, binning: 1, drizzle: 1, reducer: 1 },
+  },
+  {
     id: 'custom',
     label: 'Custom',
     optics: { apertureMm: 100, focalLengthMm: 550, sensorWmm: 23.5, sensorHmm: 15.7, pixelUm: 3.76, binning: 1, drizzle: 1, reducer: 1 },

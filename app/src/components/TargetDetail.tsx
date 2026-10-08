@@ -8,20 +8,10 @@ import { clockIn, nightNow, tzOf } from '../lib/tz'
 import { useSummary } from '../lib/wiki'
 import AltitudeChart from './AltitudeChart'
 import TargetInfo from './TargetInfo'
+import { filterAdvice } from '../lib/filters'
 import FramingPreview, { type Scope } from './FramingPreview'
 
 type Store = ReturnType<typeof useStore>
-
-/** Rough, general guidance by object type (not specific to a filter wheel). */
-function filterAdvice(type: string) {
-  if (['HII', 'EmN', 'SNR', 'Neb', 'Cl+N'].includes(type)) return { color: 'Ha or dual narrowband', mono: 'Ha + OIII (+ SII)', seestar: 'Dual-band (LP) filter on' }
-  if (type === 'PN') return { color: 'OIII / dual narrowband', mono: 'OIII + Ha', seestar: 'Dual-band (LP) filter on' }
-  if (type === 'RfN') return { color: 'Broadband, UV/IR cut', mono: 'L + RGB', seestar: 'No filter' }
-  if (type === 'DrkN') return { color: 'Broadband, long integration', mono: 'L + RGB', seestar: 'No filter' }
-  if (['OCl', 'GCl', '*Ass', '*', '**'].includes(type)) return { color: 'Broadband, UV/IR cut', mono: 'RGB', seestar: 'No filter' }
-  if (type.startsWith('G')) return { color: 'Broadband, UV/IR cut', mono: 'L + RGB (+ Ha for star-forming regions)', seestar: 'No filter' }
-  return { color: 'Broadband, UV/IR cut', mono: 'L + RGB', seestar: 'No filter' }
-}
 
 const PRIORITIES: { id: Priority; label: string; color: string }[] = [
   { id: 'high', label: 'High', color: 'var(--bad)' }, { id: 'medium', label: 'Medium', color: 'var(--warn)' }, { id: 'low', label: 'Low', color: 'var(--mute)' },

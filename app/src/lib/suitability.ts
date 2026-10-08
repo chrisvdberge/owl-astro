@@ -7,6 +7,9 @@ import { horizonAlt, moonIllum, separation, type Location } from './astro'
 export interface Settings { minAlt: number; minHours: number; scope?: { presetId: string; optics: Optics } }
 export const DEFAULT_SETTINGS: Settings = { minAlt: 25, minHours: 2 }
 
+/** Ranking nudge for a wishlist item: unfinished projects first, then the priority the user gave. */
+export const rankBonus = (w: { status: string; priority?: string }) => (w.status === 'progress' ? 10 : 0) + (w.priority === 'high' ? 6 : w.priority === 'low' ? -4 : 0)
+
 export type MoonTolerance = 'tolerant' | 'dark'
 
 /** Emission-type objects tolerate the moon with the dual-band filter; everything else wants a dark sky. */
@@ -55,6 +58,7 @@ export interface NightResult {
   hours: number          // usable hours (quality-weighted: nautical counts 60%)
   rawHours: number
   peakAlt: number
+  peakAt: number         // epoch ms of the highest usable sample (0 when none)
   moonIllum: number
   moonPenalty: number    // 0..1
   score: number          // 0..100, 0 when below the minimum window
@@ -69,7 +73,7 @@ export function scoreNights(loc: Location, target: Target, nights: EphemNight[],
   const tol = tolerance ?? defaultMoonTolerance(target.type)
   const obs = new Astronomy.Observer(loc.lat, loc.lon, loc.elevation)
   return nights.map((n) => {
-    let weighted = 0, raw = 0, peak = 0, moonUp = 0, sepSum = 0
+    let weighted = 0, raw = 0, peak = 0, peakAt = 0, moonUp = 0, sepSum = 0
     const usable: boolean[] = []
     for (const e of n.samples) {
       const hz = Astronomy.Horizon(new Date(e.t), obs, target.ra / 15, target.dec, 'normal')
@@ -79,7 +83,7 @@ export function scoreNights(loc: Location, target: Target, nights: EphemNight[],
       const w = STEP_MIN / 60
       raw += w
       weighted += e.sun < -18 ? w : w * 0.6
-      peak = Math.max(peak, hz.altitude)
+      if (hz.altitude > peak) { peak = hz.altitude; peakAt = e.t }
       if (e.moonAlt > 0) { moonUp++; sepSum += separation(target.ra, target.dec, e.moonRa, e.moonDec) }
     }
     const samplesUsed = Math.max(1, usable.filter(Boolean).length)
@@ -91,7 +95,7 @@ export function scoreNights(loc: Location, target: Target, nights: EphemNight[],
     const hoursScore = Math.min(weighted / 7, 1)
     const altScore = Math.min(Math.max((peak - s.minAlt) / 35, 0), 1)
     const score = suitable ? Math.round(100 * (0.65 * hoursScore + 0.2 * altScore + 0.15) * (1 - 0.9 * moonPenalty)) : 0
-    return { date: n.date, hours: weighted, rawHours: raw, peakAlt: peak, moonIllum: n.illum, moonPenalty, score, suitable, usable }
+    return { date: n.date, hours: weighted, rawHours: raw, peakAlt: peak, peakAt, moonIllum: n.illum, moonPenalty, score, suitable, usable }
   })
 }
 

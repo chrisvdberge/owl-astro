@@ -18,6 +18,8 @@ export interface FrameData {
 }
 /** A saved framing of a target; a target can have several (wide field, close crop, mosaic…). */
 export interface Framing extends FrameData { id: string; name: string; created: string; thumb?: string }
+/** One target in a night's schedule; times are minutes after 17:00 site time on the night starting `date` (YYYY-MM-DD). */
+export interface PlanBlock { id: string; date: string; targetId: string; start: number; end: number }
 export interface Session { id: string; date: string; hours: number; note: string }
 export interface WishItem { id: string; status: Status; goalHours?: number; notes: string; moon?: MoonTolerance; priority?: Priority; added: string; sessions?: Session[]; framings?: Framing[]; custom?: CustomTarget }
 
@@ -29,7 +31,7 @@ export function upgradeWish(w: WishItem & { framing?: FrameData; thumb?: string 
 }
 
 // Persistence goes through this small interface so a Supabase implementation can replace localStorage later.
-interface State { locations: Location[]; activeId: string; wishlist: WishItem[]; settings: Settings }
+interface State { locations: Location[]; activeId: string; wishlist: WishItem[]; settings: Settings; plan: PlanBlock[] }
 
 const KEY = 'astroplanner.v1'
 
@@ -38,6 +40,7 @@ const DEFAULT: State = {
   activeId: 'home',
   wishlist: [],
   settings: DEFAULT_SETTINGS,
+  plan: [],
 }
 
 function load(): State {
@@ -45,7 +48,7 @@ function load(): State {
     const raw = localStorage.getItem(KEY)
     if (raw) {
       const s = JSON.parse(raw) as State
-      if (s.locations?.length) return { ...DEFAULT, ...s, settings: { ...DEFAULT_SETTINGS, ...s.settings }, wishlist: (s.wishlist ?? []).map(upgradeWish) }
+      if (s.locations?.length) return { ...DEFAULT, ...s, settings: { ...DEFAULT_SETTINGS, ...s.settings }, wishlist: (s.wishlist ?? []).map(upgradeWish), plan: s.plan ?? [] }
     }
   } catch { /* storage unavailable */ }
   return DEFAULT
@@ -159,6 +162,11 @@ export function useStore(userId: string | null) {
       })),
     removeSession: (id: string, sid: string) =>
       update((s) => ({ ...s, wishlist: s.wishlist.map((w) => (w.id === id ? { ...w, sessions: (w.sessions ?? []).filter((x) => x.id !== sid) } : w)) })),
+    plan: state.plan,
+    addBlock: (b: PlanBlock) => update((s) => ({ ...s, plan: [...s.plan, b] })),
+    patchBlock: (id: string, patch: Partial<PlanBlock>) => update((s) => ({ ...s, plan: s.plan.map((b) => (b.id === id ? { ...b, ...patch } : b)) })),
+    removeBlock: (id: string) => update((s) => ({ ...s, plan: s.plan.filter((b) => b.id !== id) })),
+    removeBlocksFor: (date: string, targetId: string) => update((s) => ({ ...s, plan: s.plan.filter((b) => !(b.date === date && b.targetId === targetId)) })),
     removeWish: (id: string) => update((s) => ({ ...s, wishlist: s.wishlist.filter((w) => w.id !== id) })),
     setActive: (id: string) => update((s) => ({ ...s, activeId: id })),
     saveLocation: (loc: Location) =>

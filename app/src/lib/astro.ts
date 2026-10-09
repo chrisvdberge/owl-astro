@@ -12,6 +12,7 @@ export interface Location {
   horizon: HorizonPoint[] // sorted by azimuth; empty = flat horizon
   seeing?: number // typical seeing in arcsec at this site (default 3)
   tz?: string // IANA time zone of the site (default: browser zone)
+  bortle?: number // sky darkness 1 (darkest) .. 9, for exposure estimates
 }
 
 /** Gaps wider than this between two points are open sky: the horizon ramps down to 0° beside each point. */

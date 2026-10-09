@@ -10,6 +10,7 @@ import AltitudeChart from './AltitudeChart'
 import TargetInfo from './TargetInfo'
 import { filterAdvice } from '../lib/filters'
 import FramingPreview, { type Scope } from './FramingPreview'
+import ExposurePlanner from './ExposurePlanner'
 
 type Store = ReturnType<typeof useStore>
 
@@ -80,6 +81,8 @@ export default function TargetDetail({ o, store, scope, onClose, onShow, onPlann
           store.addWish(o.id, { status: 'wishlist', custom: isCustom(o.id) ? { name: o.names[0], ra: o.ra, dec: o.dec, con: o.con } : undefined })
           store.addFraming(o.id, { ...data, id: crypto.randomUUID(), name: `Framing ${(wish?.framings?.length ?? 0) + 1}`, created: new Date().toISOString().slice(0, 10), thumb })
         }} />
+
+        <ExposurePlanner o={o} store={store} scope={scope} />
 
         <div className="two">
           <section className="card">

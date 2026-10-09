@@ -82,6 +82,13 @@ export function useStore(userId: string | null) {
     }
   }, [userId])
 
+  // changes made offline stay queued; send them when the connection returns
+  useEffect(() => {
+    const retry = () => { if (pending.current.size) void flush() }
+    window.addEventListener('online', retry)
+    return () => window.removeEventListener('online', retry)
+  }, [flush])
+
   const enqueue = useCallback((ops: Op[]) => {
     if (!supabase || !userId || !ready.current || !ops.length) return
     for (const o of ops) pending.current.set(`${o.table}:${o.id}`, o)

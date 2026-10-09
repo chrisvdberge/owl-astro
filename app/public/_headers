@@ -1,0 +1,7 @@
+# The service worker and manifest must always be re-checked, or an installed app would never learn about a new version.
+/sw.js
+  Cache-Control: no-cache
+/manifest.webmanifest
+  Cache-Control: no-cache
+/registerSW.js
+  Cache-Control: no-cache

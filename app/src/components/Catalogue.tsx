@@ -137,7 +137,7 @@ export default function Catalogue({ store, catalog, scope, onDetails, onShow }: 
     return (
       <article key={o.id} className="ccard">
         <div className="cthumb" onClick={() => onDetails(o)}>
-          <img src={cutoutUrl(defaultSurvey(o), o.ra, o.dec, view, 320, 180)} alt="" loading="lazy" />
+          <img src={cutoutUrl(defaultSurvey(o), o.ra, o.dec, view, 320, 180)} alt="" loading="lazy" crossOrigin="anonymous" />
           <svg viewBox="0 0 320 180">{polys.map((p, i) => <polygon key={i} points={p.map((q) => q.join(',')).join(' ')} />)}</svg>
         </div>
         <div className="cbody">

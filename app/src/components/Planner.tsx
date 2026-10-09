@@ -223,7 +223,8 @@ function Sessions({ w, store, onLog }: { w: Item['w']; store: Store; onLog: (p: 
       {w.goalHours ? <div className="bar"><span style={{ width: `${pct}%` }} /></div> : null}
       {sessions.map((x) => (
         <p key={x.id} className="note srow"><span>{x.date} · {x.hours.toFixed(2).replace(/\.?0+$/, '')} h{x.frames && x.exposure ? ` (${x.frames}×${x.exposure}s)` : ''}{x.setup ? ` · ${x.setup}` : ''}{x.note ? ` · ${x.note}` : ''}</span>
-          <button className="lnk" onClick={() => store.removeSession(w.id, x.id)}>remove</button></p>
+          <span><button className="lnk" onClick={() => onLog({ targetId: w.id, sessionId: x.id })}>edit</button>
+          <button className="lnk" onClick={() => store.removeSession(w.id, x.id)}>remove</button></span></p>
       ))}
       <div className="row"><button onClick={() => onLog({ targetId: w.id })}>＋ Log observation</button></div>
     </div>

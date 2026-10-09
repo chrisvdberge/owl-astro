@@ -651,7 +651,7 @@ export default function App() {
       </header>
       {view === 'tonight' && <main className="pmain"><Tonight store={store} catalog={catalog} scope={defaultScope} onShow={show} onDetails={setDetail} onSky={() => goView('sky')} onLog={setObs} /></main>}
       {view === 'catalogue' && <main className="pmain"><Catalogue store={store} catalog={catalog} scope={defaultScope} onDetails={setDetail} onShow={show} /></main>}
-      {view === 'observations' && <main className="pmain"><Observations store={store} catalog={catalog} onDetails={setDetail} onAdd={() => setObs({})} /></main>}
+      {view === 'observations' && <main className="pmain"><Observations store={store} catalog={catalog} onDetails={setDetail} onAdd={() => setObs({})} onEdit={setObs} /></main>}
       {view === 'planner' && <main className="pmain"><Planner store={store} catalog={catalog} onShow={show} onDetails={setDetail} onLog={setObs} /></main>}
       <aside className={`l ${panel === 'left' ? 'open' : ''}`}>{left}</aside>
       <div className="view" ref={viewRef} />

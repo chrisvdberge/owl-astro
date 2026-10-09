@@ -156,11 +156,14 @@ export function useStore(userId: string | null) {
       update((s) => ({ ...s, wishlist: s.wishlist.map((w) => (w.id === id ? { ...w, framings: (w.framings ?? []).filter((f) => f.id !== fid) } : w)) })),
     patchWish: (id: string, patch: Partial<WishItem>) =>
       update((s) => ({ ...s, wishlist: s.wishlist.map((w) => (w.id === id ? { ...w, ...patch } : w)) })),
-    addSession: (id: string, ses: Omit<Session, 'id'>) =>
+    addSession: (id: string, ses: Omit<Session, 'id'> & { id?: string }) =>
       update((s) => ({
         ...s,
-        wishlist: s.wishlist.map((w) => (w.id === id ? { ...w, status: w.status === 'wishlist' ? 'progress' : w.status, sessions: [...(w.sessions ?? []), { ...ses, id: crypto.randomUUID() }] } : w)),
+        wishlist: s.wishlist.map((w) => (w.id === id ? { ...w, status: w.status === 'wishlist' ? 'progress' : w.status, sessions: [...(w.sessions ?? []), { ...ses, id: ses.id ?? crypto.randomUUID() }] } : w)),
       })),
+    /** Changes an observation in place; leave a field out of `patch` to keep it, pass undefined to clear it. */
+    patchSession: (id: string, sid: string, patch: Partial<Omit<Session, 'id'>>) =>
+      update((s) => ({ ...s, wishlist: s.wishlist.map((w) => (w.id === id ? { ...w, sessions: (w.sessions ?? []).map((x) => (x.id === sid ? { ...x, ...patch } : x)) } : w)) })),
     removeSession: (id: string, sid: string) =>
       update((s) => ({ ...s, wishlist: s.wishlist.map((w) => (w.id === id ? { ...w, sessions: (w.sessions ?? []).filter((x) => x.id !== sid) } : w)) })),
     plan: state.plan,

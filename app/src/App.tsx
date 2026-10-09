@@ -17,6 +17,8 @@ import TargetInfo from './components/TargetInfo'
 import TargetDetail from './components/TargetDetail'
 import Tonight from './components/Tonight'
 import Catalogue from './components/Catalogue'
+import DepthMap from './components/DepthMap'
+import { cropAtDepth } from './lib/depth'
 import Observations from './components/Observations'
 import ObservationForm, { type ObsPrefill } from './components/ObservationForm'
 import { setupLabel } from './lib/gear'
@@ -57,6 +59,7 @@ export default function App() {
   const [detail, setDetail] = useState<CatObject | null>(null)
   const [obs, setObs] = useState<ObsPrefill | null>(null)
   const [sess, setSess] = useState<[number, number] | null>(null)
+  const [depthMin, setDepthMin] = useState(100) // keep only the area covered by at least this % of the session's frames
   const [menu, setMenu] = useState<{ x: number; y: number; ra: number; dec: number } | null>(null)
   const [toast, setToast] = useState('')
   const [coordIn, setCoordIn] = useState('')
@@ -130,9 +133,9 @@ export default function App() {
     for (let m = lo; m <= hi; m += 10) mins.push(m)
     const angles = mins.map((m) => parallacticFromLst(loc.lat, lstHours(loc, new Date(base + m * 60000)), frame.ra, frame.dec))
     const ghostIdx = [...new Set(Array.from({ length: Math.min(8, mins.length) }, (_, i) => Math.round((i * (mins.length - 1)) / Math.max(1, Math.min(8, mins.length) - 1))))]
-    const crop = mosaic.cols * mosaic.rows === 1 ? sessionCrop(res.fovW, res.fovH, angles) : null
+    const crop = mosaic.cols * mosaic.rows === 1 ? (depthMin >= 100 ? sessionCrop(res.fovW, res.fovH, angles) : cropAtDepth(res.fovW, res.fovH, angles, depthMin / 100)) : null
     return { lo, hi, ghosts: ghostIdx.map((i) => ({ min: mins[i], angle: angles[i] })), crop, angles }
-  }, [mount, range[0], range[1], loc, base, frame.ra, frame.dec, mosaic.cols, mosaic.rows, res.fovW, res.fovH]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mount, range[0], range[1], loc, base, frame.ra, frame.dec, mosaic.cols, mosaic.rows, res.fovW, res.fovH, depthMin]) // eslint-disable-line react-hooks/exhaustive-deps
   const sweep = useMemo(() => {
     const u = samples.filter((x) => x.usable)
     if (!u.length) return null
@@ -577,9 +580,16 @@ export default function App() {
               <p className="note">
                 {Math.abs(range[1] - range[0]) / 60 >= 0.1 ? `${(Math.abs(range[1] - range[0]) / 60).toFixed(1)} h` : 'Instant'} · field turns <b>{Math.abs(Math.max(...session.angles) - Math.min(...session.angles)).toFixed(0)}°</b>
                 {session.crop ? (
-                  <> → crop to <b>{(session.crop.w * 60).toFixed(0)}′ × {(session.crop.h * 60).toFixed(0)}′</b> (keeps {Math.round(session.crop.scale * 100)}% of each side, {Math.round(session.crop.scale ** 2 * 100)}% of the area), tilted {session.crop.ref.toFixed(0)}° on the sky</>
+                  <> → crop to <b>{(session.crop.w * 60).toFixed(0)}′ × {(session.crop.h * 60).toFixed(0)}′</b> (keeps {Math.round(session.crop.scale * 100)}% of each side, {Math.round(session.crop.scale ** 2 * 100)}% of the area{depthMin < 100 ? `, every pixel has ≥ ${depthMin}% of the integration` : ''}), tilted {session.crop.ref.toFixed(0)}° on the sky</>
                 ) : <> · crop is worked out for single frames only</>}
               </p>
+            )}
+            {session?.crop && (
+              <>
+                <label className="f"><span>Keep depth ≥</span>
+                  <input type="range" min={50} max={100} step={5} value={depthMin} onChange={(e) => setDepthMin(+e.target.value)} /><em>{depthMin}%</em></label>
+                <DepthMap fovW={res.fovW} fovH={res.fovH} angles={session.angles} crop={session.crop} />
+              </>
             )}
             {plan && <p className="note">Violet = start of session, orange = end; green = what every frame covers.</p>}
           </>

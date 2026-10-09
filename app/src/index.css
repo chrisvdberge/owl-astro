@@ -199,3 +199,7 @@ details.more { margin-top: 8px; } details.more summary { cursor: pointer; color:
 .cbody .plus.done { background: rgba(74,222,128,.15); border-color: var(--ok); color: var(--ok); }
 
 .orow .title { text-align: left; justify-self: start; }
+
+/* depth map */
+.depth { margin: 8px 0; } .depth canvas { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; background: #0b0f17; image-rendering: pixelated; }
+.dtab { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; } .dtab td { padding: 2px 4px; color: var(--mute); } .dtab td:last-child { text-align: right; color: var(--fg); } .dtab i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: middle; }

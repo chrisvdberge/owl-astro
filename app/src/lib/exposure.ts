@@ -22,11 +22,14 @@ export function surfaceBrightness(o: CatObject): { mu: number; source: 'catalogu
 const F0 = 3e10      // photons / s / m² from a magnitude-0 source over a ~300 nm visible band
 const OPTICS = 0.85  // throughput of lenses, coatings and filters other than the one chosen
 const EFFICIENCY = 0.9 // frames lost to satellites, trails, clouds and rejection
-/** Quality tiers: signal-to-noise per pixel in the stack, and the least time that is worth planning (hours) however bright the target. */
+/**
+ * Quality tiers: signal-to-noise per pixel in the stack, the least time worth planning (hours) however bright the target, and how
+ * smooth the background must be: noise in the stack as a share of a typical (Bortle 5) sky level (25 means noise of 4% of that level).
+ */
 export const TIERS = [
-  { id: 'decent', label: 'Decent', snr: 2, floor: 10 / 60 },
-  { id: 'good', label: 'Good', snr: 4, floor: 0.5 },
-  { id: 'great', label: 'Great', snr: 8, floor: 1 },
+  { id: 'decent', label: 'Decent', snr: 2, floor: 10 / 60, smooth: 25 },
+  { id: 'good', label: 'Good', snr: 4, floor: 0.5, smooth: 50 },
+  { id: 'great', label: 'Great', snr: 8, floor: 1, smooth: 100 },
 ] as const
 
 export type Filter = 'none' | 'dual'
@@ -55,6 +58,8 @@ export interface ExposureEstimate {
   signal: number; sky: number      // electrons per second per pixel
   hours: Record<(typeof TIERS)[number]['id'], number>
   perSub: number                    // SNR of one sub-exposure
+  skySub: number                    // one sub's SNR against the reference background level (sky shot noise + read noise)
+  bgLimited: boolean                // the 'good' time is set by background smoothness, not by the target's brightness
 }
 
 /**
@@ -64,32 +69,41 @@ export interface ExposureEstimate {
  */
 export function estimateExposure(o: CatObject, optics: Optics, bortle: number, subSec: number, filter: Filter, moon = 0): ExposureEstimate | null {
   const sb = surfaceBrightness(o)
+  const isCluster = CLUSTERS.includes(o.type)
+  if (!sb && !isCluster) return null
   const skyMag = SKY_MAG[Math.min(9, Math.max(1, Math.round(bortle)))]
-  const mu = sb?.mu ?? 0, muSource = sb?.source ?? ''
-  const tiers = (f: (t: (typeof TIERS)[number]) => number) => Object.fromEntries(TIERS.map((t) => [t.id, Math.max(t.floor, f(t))])) as ExposureEstimate['hours']
-
-  // clusters are bright point sources: a short stack shows them, more time mainly adds faint stars and cleaner colour
-  if (CLUSTERS.includes(o.type)) {
-    const k = 1 + 0.15 * (bortle - 5) + moon * 0.5
-    return { kind: 'cluster', mu, muSource, skyMag, signal: 0, sky: 0, perSub: 0, hours: tiers((t) => t.floor * 1.5 * Math.max(0.5, k)) }
-  }
-  if (!sb) return null
 
   const r = compute(optics, 3)
   const area = Math.PI * (optics.apertureMm / 2000) ** 2           // m²
   const px = r.scale ** 2                                          // arcsec² per pixel
   const rate = (flux: number) => flux * area * OPTICS * (optics.qe ?? 0.6) * px
   const dual = filter === 'dual'
-  const ln = LINES[o.type]
-  const rayleighs = ln ? ln.typ * 10 ** (-0.4 * Math.max(-ln.nudge, Math.min(ln.nudge, sb.mu - ln.mu))) : 0
-  const cont = F0 * 10 ** (-0.4 * sb.mu)
-  // dual-band passes the emission lines but little continuum; without a filter the object's continuum and its lines both arrive
-  const signal = dual ? rate((rayleighs * RAYLEIGH + cont * 0.08) * 0.9) : rate(cont + rayleighs * RAYLEIGH)
   const sky = rate(F0 * 10 ** (-0.4 * skyMag) * (dual ? DUAL_SKY : 1)) * (1 + moon * (dual ? 0.8 : 4))
   const rn = optics.readNoise ?? 2
+  // how many subs it takes for the background to average smooth: sky shot noise and read noise both beat down as 1/sqrt(N).
+  // Smooth is judged against a fixed reference level (a Bortle-5 sky), so darker skies, with less sky noise, need less time
+  const refLevel = rate(F0 * 10 ** (-0.4 * SKY_MAG[5]) * (dual ? DUAL_SKY : 1))
+  const skySub = (refLevel * subSec) / Math.sqrt(sky * subSec + rn * rn)
+  const smoothHours = (t: (typeof TIERS)[number]) => ((t.smooth / skySub) ** 2 * subSec) / 3600 / EFFICIENCY
+
+  const make = (perTier: (t: (typeof TIERS)[number]) => number) => Object.fromEntries(TIERS.map((t) => [t.id, Math.max(t.floor, perTier(t))])) as ExposureEstimate['hours']
+
+  // clusters are bright point sources: they show in minutes, so the time that matters is a smooth background and clean stars
+  if (isCluster) {
+    return { kind: 'cluster', mu: sb?.mu ?? 0, muSource: sb?.source ?? '', skyMag, signal: 0, sky, perSub: 0, skySub, bgLimited: true, hours: make(smoothHours) }
+  }
+
+  const ln = LINES[o.type]
+  const rayleighs = ln ? ln.typ * 10 ** (-0.4 * Math.max(-ln.nudge, Math.min(ln.nudge, sb!.mu - ln.mu))) : 0
+  const cont = F0 * 10 ** (-0.4 * sb!.mu)
+  // dual-band passes the emission lines but little continuum; without a filter the object's continuum and its lines both arrive
+  const signal = dual ? rate((rayleighs * RAYLEIGH + cont * 0.08) * 0.9) : rate(cont + rayleighs * RAYLEIGH)
   const perSub = (signal * subSec) / Math.sqrt((signal + sky) * subSec + rn * rn)
-  const hours = tiers((t) => ((t.snr / perSub) ** 2 * subSec) / 3600 / EFFICIENCY)
-  return { kind: ln ? 'emission' : 'extended', mu: sb.mu, muSource: sb.source, skyMag, lines: ln ? rayleighs : undefined, signal, sky, hours, perSub }
+  const target = (t: (typeof TIERS)[number]) => ((t.snr / perSub) ** 2 * subSec) / 3600 / EFFICIENCY
+  // unfiltered, a bright target still needs the sky behind it to smooth out; with a narrowband filter the sky is dark and that stops mattering
+  const hours = make((t) => (dual ? target(t) : Math.max(target(t), smoothHours(t))))
+  const bgLimited = !dual && smoothHours(TIERS[1]) > target(TIERS[1])
+  return { kind: ln ? 'emission' : 'extended', mu: sb!.mu, muSource: sb!.source, skyMag, lines: ln ? rayleighs : undefined, signal, sky, hours, perSub, skySub, bgLimited }
 }
 
 /** Fills in sensor characteristics (quantum efficiency, read noise) from the known unit or camera when the optics do not carry them. */

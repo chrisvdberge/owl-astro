@@ -64,11 +64,11 @@ export default function ExposurePlanner({ o, store, scope }: { o: CatObject; sto
       </div>
       <p className="note fine">
         {est.kind === 'cluster'
-          ? <>Clusters are bright: even a short stack shows them. More time mostly adds fainter stars and cleaner colour, so these are practical guides, not signal-to-noise targets.</>
+          ? <>Clusters are bright: their stars show in minutes. The time here is how long the stack needs to average the sky background smooth, so that read noise and sky shot noise fade ({TIERS.map((t) => `${(100 / t.smooth).toFixed(0)}%`).join(' / ')} of a typical sky level; darker skies get there sooner).</>
           : <>
             Assumes {est.kind === 'emission' ? <>emission lines of about {Math.round(est.lines!)} R (typical for this kind of nebula, nudged by the catalogue) on top of </> : null}
-            the object at ~{est.mu.toFixed(1)} mag/arcsec² ({est.muSource}) under a {est.skyMag} mag/arcsec² sky; “decent / good / great” mean a signal-to-noise of {TIERS.map((t) => t.snr).join(' / ')} per pixel in the stack, and no estimate goes below {TIERS.map((t) => hrs(t.floor)).join(' / ')}.
-            A mean value understates bright cores and overstates faint outskirts, so treat the numbers as a planning range.
+            the object at ~{est.mu.toFixed(1)} mag/arcsec² ({est.muSource}) under a {est.skyMag} mag/arcsec² sky; “decent / good / great” mean a signal-to-noise of {TIERS.map((t) => t.snr).join(' / ')} per pixel in the stack{est.bgLimited ? ', and here the time is set by smoothing the sky background rather than by how bright the target is' : ''}.
+            No estimate goes below {TIERS.map((t) => hrs(t.floor)).join(' / ')}. A mean value understates bright cores and overstates faint outskirts, so treat the numbers as a planning range.
           </>}
       </p>
     </section>

@@ -18,6 +18,7 @@ import TargetDetail from './components/TargetDetail'
 import Tonight from './components/Tonight'
 import Catalogue from './components/Catalogue'
 import DepthMap from './components/DepthMap'
+import { DEFAULT_BORTLE } from './lib/exposure'
 import { cropAtDepth } from './lib/depth'
 import Observations from './components/Observations'
 import ObservationForm, { type ObsPrefill } from './components/ObservationForm'
@@ -95,7 +96,7 @@ export default function App() {
       if (t) setOptics({ ...optics, apertureMm: t.apertureMm, focalLengthMm: t.focalLengthMm, reducer: 1 })
     } else {
       const c = CAMERAS.find((x) => x.id === id)
-      if (c) setOptics({ ...optics, sensorWmm: c.sensorWmm, sensorHmm: c.sensorHmm, pixelUm: c.pixelUm })
+      if (c) setOptics({ ...optics, sensorWmm: c.sensorWmm, sensorHmm: c.sensorHmm, pixelUm: c.pixelUm, qe: c.qe, readNoise: c.readNoise })
     }
   }
   // the account's default telescope + camera; the Seestar S50 Pro until the user picks another
@@ -502,6 +503,12 @@ export default function App() {
         <label className="f"><span>Latitude °N</span><input type="number" step="0.0001" value={loc.lat} onChange={(e) => patchLoc({ lat: +e.target.value, tz: tzFromCoords(+e.target.value, loc.lon) ?? loc.tz })} /></label>
         <label className="f"><span>Longitude °E</span><input type="number" step="0.0001" value={loc.lon} onChange={(e) => patchLoc({ lon: +e.target.value, tz: tzFromCoords(loc.lat, +e.target.value) ?? loc.tz })} /></label>
         <label className="f"><span>Time zone</span><input value={loc.tz ?? tzOf(loc)} onChange={(e) => patchLoc({ tz: e.target.value })} /></label>
+        <label className="f"><span>Sky (Bortle)</span>
+          <select value={loc.bortle ?? ''} onChange={(e) => patchLoc({ bortle: e.target.value ? +e.target.value : undefined })}>
+            <option value="">Not set (assume {DEFAULT_BORTLE})</option>
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((b) => <option key={b} value={b}>{b}{b <= 2 ? ' — excellent dark' : b <= 4 ? ' — rural' : b <= 6 ? ' — suburban' : b === 7 ? ' — bright suburban' : ' — city'}</option>)}
+          </select>
+        </label>
         <label className="f"><span>Elevation m</span><input type="number" value={loc.elevation} onChange={(e) => patchLoc({ elevation: +e.target.value })} /></label>
         <div className="row">
           <button onClick={here}>📍 Here</button><button onClick={newLoc}>+ New</button>

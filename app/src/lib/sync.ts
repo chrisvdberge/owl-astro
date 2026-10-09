@@ -16,7 +16,7 @@ export type Op =
   | { table: 'locations' | 'wishlist' | 'sessions' | 'framings' | 'plan_blocks'; kind: 'delete'; id: string }
   | { table: 'settings'; kind: 'upsert'; id: 'settings'; row: Record<string, unknown> }
 
-const locRow = (l: Location) => ({ id: l.id, name: l.name, lat: l.lat, lon: l.lon, elevation: l.elevation, horizon: l.horizon, seeing: l.seeing ?? 3, tz: l.tz ?? null })
+const locRow = (l: Location) => ({ id: l.id, name: l.name, lat: l.lat, lon: l.lon, elevation: l.elevation, horizon: l.horizon, seeing: l.seeing ?? 3, tz: l.tz ?? null, ...(l.bortle ? { bortle: l.bortle } : {}) })
 const wishRow = (w: WishItem) => ({ id: w.id, status: w.status, goal_hours: w.goalHours ?? null, notes: w.notes, moon: w.moon ?? null, added: w.added, custom: w.custom ?? null, ...(w.priority ? { priority: w.priority } : {}) })
 const framRow = (w: string, f: Framing) => { const { id, name, created, thumb, ...data } = f; return { id, wish_id: w, name, created, thumb: thumb ?? null, data } }
 const planRow = (b: PlanBlock) => ({ id: b.id, date: b.date, target_id: b.targetId, start_min: b.start, end_min: b.end })
@@ -68,7 +68,7 @@ export async function pull(db: SupabaseClient, fallback: Settings): Promise<Data
   const framings = new Map<string, Framing[]>()
   for (const r of fr.data ?? []) framings.set(r.wish_id, [...(framings.get(r.wish_id) ?? []), { ...(r.data as FrameData), id: r.id, name: r.name, created: r.created, thumb: r.thumb ?? undefined }])
   const plan: PlanBlock[] = (pb.data ?? []).map((r: Record<string, unknown>) => ({ id: r.id as string, date: r.date as string, targetId: r.target_id as string, start: r.start_min as number, end: r.end_min as number }))
-  const locations: Location[] = (l.data ?? []).map((r) => ({ id: r.id, name: r.name, lat: r.lat, lon: r.lon, elevation: r.elevation, horizon: r.horizon ?? [], seeing: r.seeing ?? 3, tz: r.tz ?? undefined }))
+  const locations: Location[] = (l.data ?? []).map((r) => ({ id: r.id, name: r.name, lat: r.lat, lon: r.lon, elevation: r.elevation, horizon: r.horizon ?? [], seeing: r.seeing ?? 3, tz: r.tz ?? undefined, bortle: r.bortle ?? undefined }))
   return {
     locations,
     activeId: st.data?.active_id && locations.some((x) => x.id === st.data.active_id) ? st.data.active_id : locations[0]?.id ?? '',

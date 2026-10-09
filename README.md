@@ -12,6 +12,15 @@ cd app && npm install && npm run dev
 
 Without any configuration everything is stored in your browser (local only).
 
+## Install and offline use (PWA)
+
+The app is a progressive web app: on a phone use "Add to Home Screen", on desktop Chrome/Edge use the install icon in the address bar.
+After the first visit it works without a connection: the app, the catalogue, the planning maths and your saved data are stored on the
+device; forecasts, survey tiles and example images you have already seen are cached, and an **Offline** chip shows when there is
+no network. Changes made offline sync when the connection returns. A new deploy shows a "new version ready" banner (Reload / Later).
+Icons are generated from `app/public/favicon.svg` with `npm run icons`. It has no effect in `npm run dev`; try it with
+`npm run build && npx vite preview`.
+
 ## Catalog
 
 `app/public/catalog.json` is generated: `node app/scripts/fetch-catalogs.mjs` downloads the extra catalogs into

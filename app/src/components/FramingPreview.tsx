@@ -77,7 +77,7 @@ export default function FramingPreview({ o, wish, scope, onSave }: { o: CatObjec
       <div className="ch"><h3>{saved ? `Your framing — ${saved.name}` : 'Through your scope'}</h3><span className="sp" />
         <small className="note">{scopeName(saved?.optics ? { presetId: saved.presetId ?? 'custom', optics } : scope)} · {res.fovW.toFixed(2)}° × {res.fovH.toFixed(2)}° · {res.scale.toFixed(2)}″/px</small></div>
       <div className="fpimg">
-        <img src={url} alt={`${o.id} survey view`} onLoad={() => setState({ url, ok: true })} onError={() => setState({ url, ok: false })} style={ok === false ? { display: 'none' } : undefined} />
+        <img src={url} crossOrigin="anonymous" alt={`${o.id} survey view`} onLoad={() => setState({ url, ok: true })} onError={() => setState({ url, ok: false })} style={ok === false ? { display: 'none' } : undefined} />
         {ok !== false && (
           <svg viewBox={`0 0 ${W} ${H}`}>{polys.map((p, i) => <polygon key={i} points={p.map((q) => q.join(',')).join(' ')} />)}</svg>
         )}

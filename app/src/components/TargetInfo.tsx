@@ -37,7 +37,7 @@ export default function TargetInfo({ o, open = true, compact = false }: { o: Cat
           {error && <p className="note">Couldn’t reach Wikimedia Commons — use the links above.</p>}
           {images && images.length === 0 && <p className="note">No images on Wikimedia Commons — try the links above.</p>}
           {images && images.length > 0 && (
-            <div className="gal">{images.map((im) => <img key={im.id} src={im.thumb} alt={im.title} title={im.title} loading="lazy" onClick={() => setView(im)} />)}</div>
+            <div className="gal">{images.map((im) => <img key={im.id} crossOrigin="anonymous" src={im.thumb} alt={im.title} title={im.title} loading="lazy" onClick={() => setView(im)} />)}</div>
           )}
         </>
       )}
@@ -45,7 +45,7 @@ export default function TargetInfo({ o, open = true, compact = false }: { o: Cat
         <div className="modal" onClick={() => setView(null)}>
           <div className="lightbox" onClick={(e) => e.stopPropagation()}>
             <h2>{view.title}<button onClick={() => setView(null)}>Close</button></h2>
-            <img src={view.full} alt={view.title} onError={(e) => { if (e.currentTarget.src !== view.thumb) e.currentTarget.src = view.thumb }} />
+            <img src={view.full} crossOrigin="anonymous" alt={view.title} onError={(e) => { if (e.currentTarget.src !== view.thumb) e.currentTarget.src = view.thumb }} />
             <p className="note">{view.artist && `${view.artist} · `}{view.license} · <a href={view.page} target="_blank" rel="noreferrer">Source on Wikimedia Commons ↗</a></p>
           </div>
         </div>

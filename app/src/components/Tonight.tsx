@@ -259,7 +259,7 @@ export default function Tonight({ store, catalog, scope, onShow, onDetails, onSk
               const thumb = thumbFor(c.o, c.w)
               return (
                 <div key={c.o.id} className={`nrow ${c.r.suitable ? '' : 'no'}`}>
-                  {thumb ? <img src={thumb} alt="" loading="lazy" onClick={() => onShow(c.o, c.w?.framings?.[0]?.id)} /> : <span className="ph" />}
+                  {thumb ? <img src={thumb} crossOrigin="anonymous" alt="" loading="lazy" onClick={() => onShow(c.o, c.w?.framings?.[0]?.id)} /> : <span className="ph" />}
                   <div className="nmeta">
                     <button className="title" onClick={() => onDetails(c.o)}><b>{longName(c.o)}</b></button>
                     <small>{c.o.typeName}{c.o.mag != null ? ` · mag ${c.o.mag}` : ''}</small>
@@ -321,7 +321,7 @@ export default function Tonight({ store, catalog, scope, onShow, onDetails, onSk
                   <div key={b.id} className="block" style={{ top: y(b.start), height: (b.end - b.start) * PX - 2, borderLeftColor: colorOf(b.targetId) }}>
                     <div className="grip s" onPointerDown={(e) => down(e, raw, 'start')} onPointerMove={move} onPointerUp={up_} />
                     <div className="bbody" onPointerDown={(e) => down(e, raw, 'move')} onPointerMove={move} onPointerUp={up_}>
-                      {thumb && (b.end - b.start) * PX > 50 && <img src={thumb} alt="" draggable={false} />}
+                      {thumb && (b.end - b.start) * PX > 50 && <img src={thumb} crossOrigin="anonymous" alt="" draggable={false} />}
                       <div><b>{longName(o)}</b><small>{t(b.start)} to {t(b.end)} · {dur(b.end - b.start)}</small></div>
                     </div>
                     <div className="bbtn"><button title="Log this block as an observation" onPointerDown={(e) => e.stopPropagation()} onClick={() => onLog({ targetId: o.id, date: night, hours: (b.end - b.start) / 60 })}>✓ Log</button>

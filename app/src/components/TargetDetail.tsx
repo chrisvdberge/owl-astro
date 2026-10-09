@@ -68,7 +68,7 @@ export default function TargetDetail({ o, store, scope, onClose, onShow, onPlann
 
         {!isCustom(o.id) && (
           <section className="about">
-            {summary?.thumb && <img src={summary.thumb} alt={summary.title} />}
+            {summary?.thumb && <img src={summary.thumb} alt={summary.title} crossOrigin="anonymous" />}
             <div>
               {loading && <p className="note">Loading description…</p>}
               {summary && <><p>{summary.extract}</p><a className="chip" href={summary.url} target="_blank" rel="noreferrer">Wikipedia ↗</a></>}

@@ -57,6 +57,7 @@ export const CAMERAS: Camera[] = [
   { id: 'canon-aps-c', label: 'Canon APS-C DSLR (600D/700D/…)', sensorWmm: 22.3, sensorHmm: 14.9, pixelUm: 4.3, qe: 0.4, readNoise: 6 },
   { id: 'canon-6d', label: 'Canon EOS 6D (full frame)', sensorWmm: 35.8, sensorHmm: 23.9, pixelUm: 6.54, qe: 0.45, readNoise: 4.5 },
   { id: 'sony-a7iii', label: 'Sony A7 III (full frame)', sensorWmm: 35.6, sensorHmm: 23.8, pixelUm: 5.9, qe: 0.55, readNoise: 3.5 },
+  { id: 'nikon-d7000', label: 'Nikon D7000 (APS-C)', sensorWmm: 23.6, sensorHmm: 15.6, pixelUm: 4.78, qe: 0.45, readNoise: 4 }, // 4928 x 3264
   { id: 'nikon-d600', label: 'Nikon D600 (full frame)', sensorWmm: 35.9, sensorHmm: 24, pixelUm: 5.95, qe: 0.45, readNoise: 5 }, // 6016 x 4016
 ]
 
@@ -70,6 +71,7 @@ export const SCOPES: Scope[] = [
   { id: 'sw-evostar72ed', label: 'Sky-Watcher Evostar 72ED (420 mm f/5.8)', apertureMm: 72, focalLengthMm: 420 },
   { id: 'sw-evostar80ed', label: 'Sky-Watcher Evostar 80ED (600 mm f/7.5)', apertureMm: 80, focalLengthMm: 600 },
   { id: 'sw-esprit100ed', label: 'Sky-Watcher Esprit 100ED (550 mm f/5.5)', apertureMm: 100, focalLengthMm: 550 },
+  { id: 'apm-107-700', label: 'APM 107/700 APO (f/6.5)', apertureMm: 107, focalLengthMm: 700 },
   { id: 'tak-fsq106', label: 'Takahashi FSQ-106EDX4 (530 mm f/5)', apertureMm: 106, focalLengthMm: 530 },
   { id: 'sw-130pds', label: 'Sky-Watcher 130PDS (650 mm f/5)', apertureMm: 130, focalLengthMm: 650 },
   { id: 'celestron-rasa8', label: 'Celestron RASA 8 (400 mm f/2)', apertureMm: 203, focalLengthMm: 400 },

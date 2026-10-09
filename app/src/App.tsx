@@ -23,6 +23,7 @@ import DepthMap from './components/DepthMap'
 import { DEFAULT_BORTLE } from './lib/exposure'
 import { cropAtDepth } from './lib/depth'
 import Observations from './components/Observations'
+import Inspector from './components/Inspector'
 import ObservationForm, { type ObsPrefill } from './components/ObservationForm'
 import { setupLabel } from './lib/gear'
 
@@ -78,8 +79,8 @@ export default function App() {
   const [mount, setMount] = useState<'altaz' | 'eq'>(() => { try { return localStorage.getItem('astroplanner.mount') === 'eq' ? 'eq' : 'altaz' } catch { return 'altaz' } })
   const minAlt = store.settings.minAlt
   // opens on Tonight once there is something on the wishlist to plan
-  const [view, setView] = useState<'sky' | 'planner' | 'tonight' | 'catalogue' | 'observations'>(() => (store.wishlist.some((w) => w.status !== 'done') ? 'tonight' : 'sky'))
-  const goView = (v: 'sky' | 'planner' | 'tonight' | 'catalogue' | 'observations') => { setView(v); if (v !== 'sky') { setFrameSel(false); setMenu(null) } }
+  const [view, setView] = useState<'sky' | 'planner' | 'tonight' | 'catalogue' | 'observations' | 'inspector'>(() => (store.wishlist.some((w) => w.status !== 'done') ? 'tonight' : 'sky'))
+  const goView = (v: 'sky' | 'planner' | 'tonight' | 'catalogue' | 'observations' | 'inspector') => { setView(v); if (v !== 'sky') { setFrameSel(false); setMenu(null) } }
   const [hzOpen, setHzOpen] = useState(false)
   const [panel, setPanel] = useState<'left' | 'right' | null>(null)
 
@@ -660,6 +661,7 @@ export default function App() {
           <button className={view === 'sky' ? 'on' : ''} onClick={() => goView('sky')}>Sky</button>
           <button className={view === 'catalogue' ? 'on' : ''} onClick={() => goView('catalogue')}>Catalogue</button>
           <button className={view === 'observations' ? 'on' : ''} onClick={() => goView('observations')}>Log</button>
+          <button className={view === 'inspector' ? 'on' : ''} onClick={() => goView('inspector')}>Inspector</button>
           <button className={view === 'planner' ? 'on' : ''} onClick={() => goView('planner')}>Planner{store.wishlist.length ? ` (${store.wishlist.length})` : ''}</button>
         </span>
         <span className="tgt">{target.label} · {sexa(target.ra, target.dec)} · {res.fovW.toFixed(2)}°×{res.fovH.toFixed(2)}°</span>
@@ -673,6 +675,7 @@ export default function App() {
       {view === 'tonight' && <main className="pmain"><Tonight store={store} catalog={catalog} scope={defaultScope} onShow={show} onDetails={setDetail} onSky={() => goView('sky')} onLog={setObs} /></main>}
       {view === 'catalogue' && <main className="pmain"><Catalogue store={store} catalog={catalog} scope={defaultScope} onDetails={setDetail} onShow={show} /></main>}
       {view === 'observations' && <main className="pmain"><Observations store={store} catalog={catalog} onDetails={setDetail} onAdd={() => setObs({})} onEdit={setObs} /></main>}
+      {view === 'inspector' && <main className="pmain"><Inspector store={store} catalog={catalog} scope={defaultScope} /></main>}
       {view === 'planner' && <main className="pmain"><Planner store={store} catalog={catalog} onShow={show} onDetails={setDetail} onLog={setObs} /></main>}
       <aside className={`l ${panel === 'left' ? 'open' : ''}`}>{left}</aside>
       <div className="view" ref={viewRef} />

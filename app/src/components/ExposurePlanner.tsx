@@ -7,7 +7,7 @@ import type { useStore } from '../lib/store'
 import type { Scope } from './FramingPreview'
 
 type Store = ReturnType<typeof useStore>
-const hrs = (h: number) => (h >= 200 ? '> 200 h' : h < 1 ? `${Math.max(1, Math.round(h * 60))} min` : `${h >= 20 ? Math.round(h) : h.toFixed(1)} h`)
+const hrs = (h: number) => (h >= 200 ? '> 200 h' : h < 1 ? `${Math.max(5, Math.round((h * 60) / 5) * 5)} min` : `${h >= 20 ? Math.round(h) : h.toFixed(1)} h`)
 
 /** Rough integration-time guide for a target with the default scope under the active location's sky. */
 export default function ExposurePlanner({ o, store, scope }: { o: CatObject; store: Store; scope: Scope }) {
@@ -63,8 +63,13 @@ export default function ExposurePlanner({ o, store, scope }: { o: CatObject; sto
           Use “good” as goal{wish?.goalHours ? ` (now ${wish.goalHours} h)` : ''}</button>
       </div>
       <p className="note fine">
-        Assumes the object at ~{est.mu.toFixed(1)} mag/arcsec² ({est.muSource}) under a {est.skyMag} mag/arcsec² sky; “decent / good / great” mean a signal-to-noise of 4 / 8 / 16 per pixel in the stack.
-        A mean value understates bright cores and overstates faint outskirts, so treat the numbers as a planning range.
+        {est.kind === 'cluster'
+          ? <>Clusters are bright: their stars show in minutes. The time here is how long the stack needs to average the sky background smooth, so that read noise and sky shot noise fade ({TIERS.map((t) => `${(100 / t.smooth).toFixed(0)}%`).join(' / ')} of a typical sky level; darker skies get there sooner).</>
+          : <>
+            Assumes {est.kind === 'emission' ? <>emission lines of about {Math.round(est.lines!)} R (typical for this kind of nebula, nudged by the catalogue) on top of </> : null}
+            the object at ~{est.mu.toFixed(1)} mag/arcsec² ({est.muSource}) under a {est.skyMag} mag/arcsec² sky; “decent / good / great” mean a signal-to-noise of {TIERS.map((t) => t.snr).join(' / ')} per pixel in the stack{est.bgLimited ? ', and here the time is set by smoothing the sky background rather than by how bright the target is' : ''}.
+            No estimate goes below {TIERS.map((t) => hrs(t.floor)).join(' / ')}. A mean value understates bright cores and overstates faint outskirts, so treat the numbers as a planning range.
+          </>}
       </p>
     </section>
   )

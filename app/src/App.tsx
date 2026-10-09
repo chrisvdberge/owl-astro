@@ -16,6 +16,7 @@ import Planner from './components/Planner'
 import TargetInfo from './components/TargetInfo'
 import TargetDetail from './components/TargetDetail'
 import Tonight from './components/Tonight'
+import Catalogue from './components/Catalogue'
 
 const SEEING = [
   { v: 1.5, l: '1.5″ — Excellent' }, { v: 2, l: '2″ — Good' }, { v: 3, l: '3″ — Average backyard' },
@@ -66,8 +67,8 @@ export default function App() {
   const [mount, setMount] = useState<'altaz' | 'eq'>(() => { try { return localStorage.getItem('astroplanner.mount') === 'eq' ? 'eq' : 'altaz' } catch { return 'altaz' } })
   const minAlt = store.settings.minAlt
   // opens on Tonight once there is something on the wishlist to plan
-  const [view, setView] = useState<'sky' | 'planner' | 'tonight'>(() => (store.wishlist.some((w) => w.status !== 'done') ? 'tonight' : 'sky'))
-  const goView = (v: 'sky' | 'planner' | 'tonight') => { setView(v); if (v !== 'sky') { setFrameSel(false); setMenu(null) } }
+  const [view, setView] = useState<'sky' | 'planner' | 'tonight' | 'catalogue'>(() => (store.wishlist.some((w) => w.status !== 'done') ? 'tonight' : 'sky'))
+  const goView = (v: 'sky' | 'planner' | 'tonight' | 'catalogue') => { setView(v); if (v !== 'sky') { setFrameSel(false); setMenu(null) } }
   const [hzOpen, setHzOpen] = useState(false)
   const [panel, setPanel] = useState<'left' | 'right' | null>(null)
 
@@ -633,6 +634,7 @@ export default function App() {
         <span className="nav">
           <button className={view === 'tonight' ? 'on' : ''} onClick={() => goView('tonight')}>Tonight</button>
           <button className={view === 'sky' ? 'on' : ''} onClick={() => goView('sky')}>Sky</button>
+          <button className={view === 'catalogue' ? 'on' : ''} onClick={() => goView('catalogue')}>Catalogue</button>
           <button className={view === 'planner' ? 'on' : ''} onClick={() => goView('planner')}>Planner{store.wishlist.length ? ` (${store.wishlist.length})` : ''}</button>
         </span>
         <span className="tgt">{target.label} · {sexa(target.ra, target.dec)} · {res.fovW.toFixed(2)}°×{res.fovH.toFixed(2)}°</span>
@@ -643,6 +645,7 @@ export default function App() {
         </span>
       </header>
       {view === 'tonight' && <main className="pmain"><Tonight store={store} catalog={catalog} scope={defaultScope} onShow={show} onDetails={setDetail} onSky={() => goView('sky')} /></main>}
+      {view === 'catalogue' && <main className="pmain"><Catalogue store={store} catalog={catalog} scope={defaultScope} onDetails={setDetail} onShow={show} /></main>}
       {view === 'planner' && <main className="pmain"><Planner store={store} catalog={catalog} onShow={show} onDetails={setDetail} /></main>}
       <aside className={`l ${panel === 'left' ? 'open' : ''}`}>{left}</aside>
       <div className="view" ref={viewRef} />

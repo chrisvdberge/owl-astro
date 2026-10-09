@@ -17,9 +17,9 @@ const PRIORITIES: { id: Priority; label: string; color: string }[] = [
   { id: 'high', label: 'High', color: 'var(--bad)' }, { id: 'medium', label: 'Medium', color: 'var(--warn)' }, { id: 'low', label: 'Low', color: 'var(--mute)' },
 ]
 
-export default function TargetDetail({ o, store, scope, onClose, onShow, onPlanner }: {
+export default function TargetDetail({ o, store, scope, onClose, onShow, onPlanner, onLog }: {
   o: CatObject; store: Store; scope: Scope
-  onClose: () => void; onShow: (fid?: string) => void; onPlanner: () => void
+  onClose: () => void; onShow: (fid?: string) => void; onPlanner: () => void; onLog: () => void
 }) {
   const { active: loc, settings, wishlist } = store
   const wish = wishlist.find((w) => w.id === o.id)
@@ -117,6 +117,7 @@ export default function TargetDetail({ o, store, scope, onClose, onShow, onPlann
           {wish ? <button className="pri" onClick={onPlanner}>📅 Open in Planner</button> : <button className="pri" onClick={() => store.addWish(o.id, { status: 'progress' })}>＋ Add to planner</button>}
           {!wish && <button onClick={() => store.addWish(o.id)}>☆ Add to wishlist</button>}
           <button onClick={() => onShow(wish?.framings?.[0]?.id)}>▭ Framing &amp; Mosaic</button>
+          <button onClick={onLog}>＋ Log observation</button>
           <span className="sp" />
           {wish && <button onClick={() => confirm(`Remove ${title} from your wishlist?`) && (store.removeWish(o.id), onClose())}>🗑 Remove from wishlist</button>}
         </footer>

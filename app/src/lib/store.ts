@@ -20,7 +20,8 @@ export interface FrameData {
 export interface Framing extends FrameData { id: string; name: string; created: string; thumb?: string }
 /** One target in a night's schedule; times are minutes after 17:00 site time on the night starting `date` (YYYY-MM-DD). */
 export interface PlanBlock { id: string; date: string; targetId: string; start: number; end: number }
-export interface Session { id: string; date: string; hours: number; note: string }
+/** One imaging session on a target. `hours` is the integration time; `frames` × `exposure` (s) is optional detail; `setup` names the telescope + camera used. */
+export interface Session { id: string; date: string; hours: number; note: string; setup?: string; frames?: number; exposure?: number }
 export interface WishItem { id: string; status: Status; goalHours?: number; notes: string; moon?: MoonTolerance; priority?: Priority; added: string; sessions?: Session[]; framings?: Framing[]; custom?: CustomTarget }
 
 /** Older saves kept one `framing` + `thumb` on the wish itself; fold them into the framings list. */

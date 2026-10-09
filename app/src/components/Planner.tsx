@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { customObject, isCustom, type CatObject } from '../lib/catalog'
 import TargetInfo from './TargetInfo'
+import type { ObsPrefill } from './ObservationForm'
 import type { useStore } from '../lib/store'
 import { tzOf, todayIn } from '../lib/tz'
 import { cloudAt, meanCloud, useCloud, type Cloud } from '../lib/weather'
@@ -17,7 +18,7 @@ const scoreColor = (s: number) => {
 const label = (o: CatObject) => (isCustom(o.id) ? o.names[0] : o.m ? `${o.m} · ${o.id}` : o.id)
 const fmt = (d: Date) => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
 
-export default function Planner({ store, catalog, onShow, onDetails }: { store: Store; catalog: CatObject[]; onShow: (o: CatObject, fid?: string) => void; onDetails: (o: CatObject) => void }) {
+export default function Planner({ store, catalog, onShow, onDetails, onLog }: { store: Store; catalog: CatObject[]; onShow: (o: CatObject, fid?: string) => void; onDetails: (o: CatObject) => void; onLog: (p: ObsPrefill) => void }) {
   const [tab, setTab] = useState<'wishlist' | 'calendar'>('calendar')
   const [nights, setNights] = useState<EphemNight[] | null>(null)
   const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1) })
@@ -105,7 +106,7 @@ export default function Planner({ store, catalog, onShow, onDetails }: { store: 
             )}
             <More title="About & example images"><TargetInfo o={o} /></More>
             <input className="notes" placeholder="Notes" value={w.notes} onChange={(e) => store.patchWish(w.id, { notes: e.target.value })} />
-            <Sessions w={w} store={store} />
+            <Sessions w={w} store={store} onLog={onLog} />
           </div>
         )
       })}
@@ -210,10 +211,7 @@ function CalendarView({ month, setMonth, picked, setPicked, onlyOpen, setOnlyOpe
   )
 }
 
-function Sessions({ w, store }: { w: Item['w']; store: Store }) {
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [hours, setHours] = useState('')
-  const [note, setNote] = useState('')
+function Sessions({ w, store, onLog }: { w: Item['w']; store: Store; onLog: (p: ObsPrefill) => void }) {
   const sessions = [...(w.sessions ?? [])].sort((a, b) => b.date.localeCompare(a.date))
   const total = sessions.reduce((a, x) => a + x.hours, 0)
   const pct = w.goalHours ? Math.min(100, (total / w.goalHours) * 100) : 0
@@ -224,15 +222,10 @@ function Sessions({ w, store }: { w: Item['w']; store: Store }) {
       </p>
       {w.goalHours ? <div className="bar"><span style={{ width: `${pct}%` }} /></div> : null}
       {sessions.map((x) => (
-        <p key={x.id} className="note srow">{x.date} · {x.hours} h{x.note ? ` · ${x.note}` : ''}
+        <p key={x.id} className="note srow"><span>{x.date} · {x.hours.toFixed(2).replace(/\.?0+$/, '')} h{x.frames && x.exposure ? ` (${x.frames}×${x.exposure}s)` : ''}{x.setup ? ` · ${x.setup}` : ''}{x.note ? ` · ${x.note}` : ''}</span>
           <button className="lnk" onClick={() => store.removeSession(w.id, x.id)}>remove</button></p>
       ))}
-      <div className="row wrap">
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        <input type="number" min={0} step="0.25" placeholder="hours" value={hours} onChange={(e) => setHours(e.target.value)} style={{ width: 80 }} />
-        <input placeholder="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
-        <button disabled={!(+hours > 0)} onClick={() => { store.addSession(w.id, { date, hours: +hours, note }); setHours(''); setNote('') }}>Log session</button>
-      </div>
+      <div className="row"><button onClick={() => onLog({ targetId: w.id })}>＋ Log observation</button></div>
     </div>
   )
 }

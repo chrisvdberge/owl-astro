@@ -11,13 +11,13 @@ import { cutoutUrl } from '../lib/hips2fits'
 import { filterShort } from '../lib/filters'
 import type { PlanBlock, useStore, WishItem } from '../lib/store'
 import type { Scope } from './FramingPreview'
+import type { ObsPrefill } from './ObservationForm'
+import { SLOT, MIN_BLOCK, bestRun as bestRunFor, freeGaps } from '../lib/schedule'
 import MoonGlyph from './MoonGlyph'
 
 type Store = ReturnType<typeof useStore>
 
-const SLOT = 20      // minutes per ephemeris sample
 const SNAP = 10      // minutes: drag granularity
-const MIN_BLOCK = 20 // minutes
 const PX = 1.1       // timeline pixels per minute
 const COLORS = ['#38bdf8', '#fbbf24', '#4ade80', '#c084fc', '#f87171', '#fb923c']
 const FILTERS = [
@@ -37,9 +37,9 @@ const addDays = (s: string, n: number) => { const d = parse(s); d.setDate(d.getD
 interface Cand { o: CatObject; w?: WishItem; r: NightResult; cloud?: number; eff: number }
 
 /** Night planner: pick a night, browse targets that are up, and lay them out on a clickable, draggable schedule. */
-export default function Tonight({ store, catalog, scope, onShow, onDetails, onSky }: {
+export default function Tonight({ store, catalog, scope, onShow, onDetails, onSky, onLog }: {
   store: Store; catalog: CatObject[]; scope: Scope
-  onShow: (o: CatObject, fid?: string) => void; onDetails: (o: CatObject) => void; onSky: () => void
+  onShow: (o: CatObject, fid?: string) => void; onDetails: (o: CatObject) => void; onSky: () => void; onLog: (p: ObsPrefill) => void
 }) {
   const { active: loc, settings, wishlist, plan } = store
   const tz = tzOf(loc)
@@ -129,32 +129,12 @@ export default function Tonight({ store, catalog, scope, onShow, onDetails, onSk
   // ---- schedule ----
   const blocks = plan.filter((b) => b.date === night).sort((a, b) => a.start - b.start)
   const shown = (b: PlanBlock) => (draft?.id === b.id ? { ...b, start: draft.start, end: draft.end } : b)
-  const gaps = useMemo(() => {
-    const out: [number, number][] = []
-    if (!darkIdx.length) return out
-    let cur = d0
-    for (const b of blocks) { if (b.start - cur >= MIN_BLOCK) out.push([cur, b.start]); cur = Math.max(cur, b.end) }
-    if (d1 - cur >= MIN_BLOCK) out.push([cur, d1])
-    return out
-  }, [blocks, d0, d1, darkIdx.length])
+  const gaps = useMemo(() => (darkIdx.length ? freeGaps(blocks, d0, d1) : []), [blocks, d0, d1, darkIdx.length])
   const planned = blocks.reduce((a, b) => a + (b.end - b.start), 0)
   const scheduledIds = [...new Set(blocks.map((b) => b.targetId))]
   const colorOf = (id: string) => COLORS[scheduledIds.indexOf(id) % COLORS.length]
 
-  /** Longest stretch within [from, to] where the target is usable. */
-  const bestRun = (c: Cand, from: number, to: number): [number, number] | null => {
-    let best: [number, number] | null = null, start = -1
-    for (let i = Math.floor(from / SLOT); i <= Math.ceil(to / SLOT); i++) {
-      const ok = i < c.r.usable.length && c.r.usable[i] && (i + 1) * SLOT > from && i * SLOT < to
-      if (ok && start < 0) start = i
-      if ((!ok || i === Math.ceil(to / SLOT)) && start >= 0) {
-        const a = Math.max(from, start * SLOT), b = Math.min(to, (ok ? i + 1 : i) * SLOT)
-        if (b - a >= MIN_BLOCK && (!best || b - a > best[1] - best[0])) best = [a, b]
-        start = -1
-      }
-    }
-    return best
-  }
+  const bestRun = (c: Cand, from: number, to: number) => bestRunFor(c.r.usable, from, to)
   const put = (o: CatObject, from: number, to: number) => store.addBlock({ id: crypto.randomUUID(), date: night, targetId: o.id, start: from, end: to })
 
   const addTarget = (c: Cand) => {
@@ -344,7 +324,8 @@ export default function Tonight({ store, catalog, scope, onShow, onDetails, onSk
                       {thumb && (b.end - b.start) * PX > 50 && <img src={thumb} alt="" draggable={false} />}
                       <div><b>{longName(o)}</b><small>{t(b.start)} to {t(b.end)} · {dur(b.end - b.start)}</small></div>
                     </div>
-                    <div className="bbtn"><button title="Details" onPointerDown={(e) => e.stopPropagation()} onClick={() => onDetails(o)}>ⓘ</button>
+                    <div className="bbtn"><button title="Log this block as an observation" onPointerDown={(e) => e.stopPropagation()} onClick={() => onLog({ targetId: o.id, date: night, hours: (b.end - b.start) / 60 })}>✓ Log</button>
+                      <button title="Details" onPointerDown={(e) => e.stopPropagation()} onClick={() => onDetails(o)}>ⓘ</button>
                       <button title="Remove from the night" onPointerDown={(e) => e.stopPropagation()} onClick={() => store.removeBlock(raw.id)}>✕</button></div>
                     <div className="grip e" onPointerDown={(e) => down(e, raw, 'end')} onPointerMove={move} onPointerUp={up_} />
                   </div>

@@ -20,7 +20,7 @@ const locRow = (l: Location) => ({ id: l.id, name: l.name, lat: l.lat, lon: l.lo
 const wishRow = (w: WishItem) => ({ id: w.id, status: w.status, goal_hours: w.goalHours ?? null, notes: w.notes, moon: w.moon ?? null, added: w.added, custom: w.custom ?? null, ...(w.priority ? { priority: w.priority } : {}) })
 const framRow = (w: string, f: Framing) => { const { id, name, created, thumb, ...data } = f; return { id, wish_id: w, name, created, thumb: thumb ?? null, data } }
 const planRow = (b: PlanBlock) => ({ id: b.id, date: b.date, target_id: b.targetId, start_min: b.start, end_min: b.end })
-const sesRow = (w: string, s: Session) => ({ id: s.id, wish_id: w, date: s.date, hours: s.hours, note: s.note })
+const sesRow = (w: string, s: Session) => ({ id: s.id, wish_id: w, date: s.date, hours: s.hours, note: s.note, ...(s.setup ? { setup: s.setup } : {}), ...(s.frames ? { frames: s.frames } : {}), ...(s.exposure ? { exposure: s.exposure } : {}) })
 const setRow = (d: Data) => ({ min_alt: d.settings.minAlt, min_hours: d.settings.minHours, active_id: d.activeId, ...(d.settings.scope ? { scope: d.settings.scope } : {}) })
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
@@ -64,7 +64,7 @@ export async function pull(db: SupabaseClient, fallback: Settings): Promise<Data
   if (pl.error && pl.error.code !== '42P01') throw pl.error
   if (!l.data?.length && !w.data?.length) return null
   const sessions = new Map<string, Session[]>()
-  for (const r of s.data ?? []) sessions.set(r.wish_id, [...(sessions.get(r.wish_id) ?? []), { id: r.id, date: r.date, hours: r.hours, note: r.note }])
+  for (const r of s.data ?? []) sessions.set(r.wish_id, [...(sessions.get(r.wish_id) ?? []), { id: r.id, date: r.date, hours: r.hours, note: r.note, setup: r.setup ?? undefined, frames: r.frames ?? undefined, exposure: r.exposure ?? undefined }])
   const framings = new Map<string, Framing[]>()
   for (const r of fr.data ?? []) framings.set(r.wish_id, [...(framings.get(r.wish_id) ?? []), { ...(r.data as FrameData), id: r.id, name: r.name, created: r.created, thumb: r.thumb ?? undefined }])
   const plan: PlanBlock[] = (pb.data ?? []).map((r: Record<string, unknown>) => ({ id: r.id as string, date: r.date as string, targetId: r.target_id as string, start: r.start_min as number, end: r.end_min as number }))

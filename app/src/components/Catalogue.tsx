@@ -6,6 +6,7 @@ import { cutoutUrl } from '../lib/hips2fits'
 import { filterShort } from '../lib/filters'
 import { clockIn, nightNow, tzOf } from '../lib/tz'
 import { ephemeris, scoreNights } from '../lib/suitability'
+import { placeOnNight } from '../lib/schedule'
 import type { useStore } from '../lib/store'
 import { panelPolygons, type Scope } from './FramingPreview'
 
@@ -44,7 +45,14 @@ export default function Catalogue({ store, catalog, scope, onDetails, onShow }: 
   const [query, setQuery] = useState('')
   const [onlyUp, setOnlyUp] = useState(false)
   const [shown, setShown] = useState(PAGE)
+  const [msg, setMsg] = useState('')
   const sentinel = useRef<HTMLDivElement>(null)
+  const night = useMemo(() => nightNow(tz).night, [tz])
+  const addTonight = (o: CatObject) => {
+    const err = placeOnNight({ loc, settings, plan: store.plan, night, o, moon: wishById.get(o.id)?.moon, add: store.addBlock })
+    setMsg(err ? `${o.m ?? o.id}: ${err}` : `${o.m ?? o.id} added to tonight's schedule`)
+    setTimeout(() => setMsg(''), 3500)
+  }
 
   const wishById = useMemo(() => new Map(wishlist.map((w) => [w.id, w])), [wishlist])
   const fov = useMemo(() => compute(scope.optics, 3), [scope])
@@ -112,6 +120,7 @@ export default function Catalogue({ store, catalog, scope, onDetails, onShow }: 
         {rows.slice(0, shown).map((o) => card(o))}
       </div>
       {rows.length === 0 && <p className="empty">Nothing matches these filters.</p>}
+      {msg && <div className="toast">{msg}</div>}
       <div ref={sentinel} style={{ height: 1 }} />
     </div>
   )
@@ -143,7 +152,10 @@ export default function Catalogue({ store, catalog, scope, onDetails, onShow }: 
             <em className="badge2 mute">{catalogTag(o)}</em>
             {r.suitable ? <em className="badge2 ok" title="Tonight">↑ {Math.round(r.peakAlt)}° · {clockIn(tz, r.peakAt)}</em> : <em className="badge2 mute">not up tonight</em>}
           </p>
-          <div className="row"><button onClick={() => onShow(o, w?.framings?.[0]?.id)}>Show on sky</button></div>
+          <div className="row"><button onClick={() => onShow(o, w?.framings?.[0]?.id)}>Show on sky</button>
+            {store.plan.some((b) => b.date === night && b.targetId === o.id)
+              ? <button className="plus done" title="On tonight's schedule — click to remove" onClick={() => store.removeBlocksFor(night, o.id)}>✓ Tonight</button>
+              : <button disabled={!r.suitable} title={r.suitable ? "Add to tonight's schedule" : 'Not observable tonight'} onClick={() => addTonight(o)}>＋ Tonight</button>}</div>
         </div>
       </article>
     )

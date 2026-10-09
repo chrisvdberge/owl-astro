@@ -17,6 +17,9 @@ import TargetInfo from './components/TargetInfo'
 import TargetDetail from './components/TargetDetail'
 import Tonight from './components/Tonight'
 import Catalogue from './components/Catalogue'
+import Observations from './components/Observations'
+import ObservationForm, { type ObsPrefill } from './components/ObservationForm'
+import { setupLabel } from './lib/gear'
 
 const SEEING = [
   { v: 1.5, l: '1.5″ — Excellent' }, { v: 2, l: '2″ — Good' }, { v: 3, l: '3″ — Average backyard' },
@@ -52,6 +55,7 @@ export default function App() {
   const [frameSel, setFrameSel] = useState(false)
   const [plan, setPlan] = useState(false)
   const [detail, setDetail] = useState<CatObject | null>(null)
+  const [obs, setObs] = useState<ObsPrefill | null>(null)
   const [sess, setSess] = useState<[number, number] | null>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; ra: number; dec: number } | null>(null)
   const [toast, setToast] = useState('')
@@ -67,8 +71,8 @@ export default function App() {
   const [mount, setMount] = useState<'altaz' | 'eq'>(() => { try { return localStorage.getItem('astroplanner.mount') === 'eq' ? 'eq' : 'altaz' } catch { return 'altaz' } })
   const minAlt = store.settings.minAlt
   // opens on Tonight once there is something on the wishlist to plan
-  const [view, setView] = useState<'sky' | 'planner' | 'tonight' | 'catalogue'>(() => (store.wishlist.some((w) => w.status !== 'done') ? 'tonight' : 'sky'))
-  const goView = (v: 'sky' | 'planner' | 'tonight' | 'catalogue') => { setView(v); if (v !== 'sky') { setFrameSel(false); setMenu(null) } }
+  const [view, setView] = useState<'sky' | 'planner' | 'tonight' | 'catalogue' | 'observations'>(() => (store.wishlist.some((w) => w.status !== 'done') ? 'tonight' : 'sky'))
+  const goView = (v: 'sky' | 'planner' | 'tonight' | 'catalogue' | 'observations') => { setView(v); if (v !== 'sky') { setFrameSel(false); setMenu(null) } }
   const [hzOpen, setHzOpen] = useState(false)
   const [panel, setPanel] = useState<'left' | 'right' | null>(null)
 
@@ -635,6 +639,7 @@ export default function App() {
           <button className={view === 'tonight' ? 'on' : ''} onClick={() => goView('tonight')}>Tonight</button>
           <button className={view === 'sky' ? 'on' : ''} onClick={() => goView('sky')}>Sky</button>
           <button className={view === 'catalogue' ? 'on' : ''} onClick={() => goView('catalogue')}>Catalogue</button>
+          <button className={view === 'observations' ? 'on' : ''} onClick={() => goView('observations')}>Log</button>
           <button className={view === 'planner' ? 'on' : ''} onClick={() => goView('planner')}>Planner{store.wishlist.length ? ` (${store.wishlist.length})` : ''}</button>
         </span>
         <span className="tgt">{target.label} · {sexa(target.ra, target.dec)} · {res.fovW.toFixed(2)}°×{res.fovH.toFixed(2)}°</span>
@@ -644,9 +649,10 @@ export default function App() {
           <button onClick={() => setPanel(panel === 'right' ? null : 'right')}>Results</button>
         </span>
       </header>
-      {view === 'tonight' && <main className="pmain"><Tonight store={store} catalog={catalog} scope={defaultScope} onShow={show} onDetails={setDetail} onSky={() => goView('sky')} /></main>}
+      {view === 'tonight' && <main className="pmain"><Tonight store={store} catalog={catalog} scope={defaultScope} onShow={show} onDetails={setDetail} onSky={() => goView('sky')} onLog={setObs} /></main>}
       {view === 'catalogue' && <main className="pmain"><Catalogue store={store} catalog={catalog} scope={defaultScope} onDetails={setDetail} onShow={show} /></main>}
-      {view === 'planner' && <main className="pmain"><Planner store={store} catalog={catalog} onShow={show} onDetails={setDetail} /></main>}
+      {view === 'observations' && <main className="pmain"><Observations store={store} catalog={catalog} onDetails={setDetail} onAdd={() => setObs({})} /></main>}
+      {view === 'planner' && <main className="pmain"><Planner store={store} catalog={catalog} onShow={show} onDetails={setDetail} onLog={setObs} /></main>}
       <aside className={`l ${panel === 'left' ? 'open' : ''}`}>{left}</aside>
       <div className="view" ref={viewRef} />
       {menu && (() => {
@@ -678,7 +684,10 @@ export default function App() {
       {detail && (
         <TargetDetail o={detail} store={store} scope={defaultScope} onClose={() => setDetail(null)}
           onShow={(fid) => { show(detail, fid); setDetail(null) }}
-          onPlanner={() => { setView('planner'); setDetail(null) }} />
+          onPlanner={() => { setView('planner'); setDetail(null) }} onLog={() => { setObs({ targetId: detail.id }); setDetail(null) }} />
+      )}
+      {obs && (
+        <ObservationForm store={store} catalog={catalog} setup={setupLabel(optics, presetId)} prefill={obs} onClose={() => setObs(null)} />
       )}
       {frameSel && view === 'sky' && <div className="fhint">Frame selected — drag to move it · click elsewhere or Esc to release</div>}
       {toast && <div className="toast">{toast}</div>}

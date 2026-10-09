@@ -16,6 +16,8 @@ import Planner from './components/Planner'
 import TargetInfo from './components/TargetInfo'
 import TargetDetail from './components/TargetDetail'
 import Tonight from './components/Tonight'
+import PwaStatus from './components/PwaStatus'
+import { useOnline } from './lib/online'
 import Catalogue from './components/Catalogue'
 import DepthMap from './components/DepthMap'
 import { DEFAULT_BORTLE } from './lib/exposure'
@@ -66,6 +68,7 @@ export default function App() {
   const [coordIn, setCoordIn] = useState('')
   const [ready, setReady] = useState(false)
   const auth = useAuth()
+  const online = useOnline()
   const store = useStore(auth.user?.id ?? null)
   const loc = store.active
   // the moment being viewed: a night (starting 17:00 site time) and minutes into it; defaults to right now / tonight at 22:00
@@ -660,6 +663,7 @@ export default function App() {
           <button className={view === 'planner' ? 'on' : ''} onClick={() => goView('planner')}>Planner{store.wishlist.length ? ` (${store.wishlist.length})` : ''}</button>
         </span>
         <span className="tgt">{target.label} · {sexa(target.ra, target.dec)} · {res.fovW.toFixed(2)}°×{res.fovH.toFixed(2)}°</span>
+        {!online && <span className="offline" title="No connection: planning works, forecasts, survey images and sync resume when you are back online">Offline</span>}
         <Account auth={auth} status={store.syncStatus} />
         <span className="tabs">
           <button onClick={() => setPanel(panel === 'left' ? null : 'left')}>Setup</button>
@@ -706,6 +710,7 @@ export default function App() {
       {obs && (
         <ObservationForm store={store} catalog={catalog} setup={setupLabel(optics, presetId)} prefill={obs} onClose={() => setObs(null)} />
       )}
+      <PwaStatus />
       {frameSel && view === 'sky' && <div className="fhint">Frame selected — drag to move it · click elsewhere or Esc to release</div>}
       {toast && <div className="toast">{toast}</div>}
       <aside className={`r ${panel === 'right' ? 'open' : ''}`}>{right}</aside>

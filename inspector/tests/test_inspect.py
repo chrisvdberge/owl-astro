@@ -9,15 +9,16 @@ def synthetic(fwhm=4.0, size=1200, nstars=250, noise=0.004, gradient=0.0, seed=1
     img = np.full((size, size), 0.05, np.float32)
     yy, xx = np.mgrid[0:size, 0:size]
     img += gradient * (xx / size)
-    sx = fwhm / 2.3548 * ecc_sigma[0]
-    sy = fwhm / 2.3548 * ecc_sigma[1]
+    k = 2 * (2 ** 0.25 - 1) ** 0.5  # Moffat beta=4 scale -> FWHM
+    sx = fwhm / k * ecc_sigma[0]
+    sy = fwhm / k * ecc_sigma[1]
     for _ in range(nstars):
         x, y = rng.uniform(30, size - 30, 2)
         amp = rng.uniform(0.05, 0.5)
-        r = 20
+        r = 25
         x0, y0 = int(x), int(y)
         gy, gx = np.mgrid[y0 - r: y0 + r + 1, x0 - r: x0 + r + 1]
-        img[y0 - r: y0 + r + 1, x0 - r: x0 + r + 1] += amp * np.exp(-0.5 * (((gx - x) / sx) ** 2 + ((gy - y) / sy) ** 2))
+        img[y0 - r: y0 + r + 1, x0 - r: x0 + r + 1] += amp * (1 + ((gx - x) / sx) ** 2 + ((gy - y) / sy) ** 2) ** -4
     img += rng.normal(0, noise, img.shape).astype(np.float32)
     return np.clip(img, 0, 1)[None]
 

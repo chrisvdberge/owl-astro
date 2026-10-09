@@ -7,7 +7,7 @@ Standalone image inspector for the planner: give it a FITS or TIFF (stacked or n
 - Background: median, flatness (peak-to-peak, RMS, corner vs centre, linear gradient, 8x8 map), colour neutrality
 - Noise sigma, sky/noise, clipping
 
-FWHM is a 2D Gaussian fit per star (geometric mean of the axes). Best on linear data; stretched images get a warning.
+FWHM is an elliptical Moffat (beta=4) fit per star, geometric mean of the axes, matching PixInsight FWHMEccentricity (checked on a real stack: 2.76 vs 2.65 px, eccentricity 0.406 vs 0.405). Best on linear data; stretched images get a warning.
 Plate scale comes from `--pixel-size`/`--focal-length`, else the FITS WCS, else `XPIXSZ`+`FOCALLEN`.
 
 ## Use

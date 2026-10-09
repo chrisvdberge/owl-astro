@@ -1,0 +1,30 @@
+[project]
+name = "astroinspect"
+version = "0.1.0"
+description = "Standalone astro image inspector: FWHM, eccentricity, SNR, noise, background flatness"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy",
+  "scipy",
+  "astropy",
+  "sep",
+  "tifffile",
+]
+
+[project.optional-dependencies]
+server = ["fastapi", "uvicorn", "python-multipart"]
+maps = ["matplotlib"]
+dev = ["pytest", "httpx", "matplotlib", "fastapi", "uvicorn", "python-multipart"]
+
+[project.scripts]
+astroinspect = "astroinspect.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

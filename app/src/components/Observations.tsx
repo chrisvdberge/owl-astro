@@ -1,14 +1,15 @@
 import { useMemo, useState } from 'react'
 import { customObject, isCustom, type CatObject } from '../lib/catalog'
 import type { useStore } from '../lib/store'
+import type { ObsPrefill } from './ObservationForm'
 
 type Store = ReturnType<typeof useStore>
 const NONE = 'Unspecified setup'
 const h = (n: number) => (n < 1 ? `${Math.round(n * 60)} min` : `${n.toFixed(n >= 10 ? 0 : 1)} h`)
 
 /** Everything imaged so far: integration time per setup, per target, and the log itself. */
-export default function Observations({ store, catalog, onDetails, onAdd }: {
-  store: Store; catalog: CatObject[]; onDetails: (o: CatObject) => void; onAdd: () => void
+export default function Observations({ store, catalog, onDetails, onAdd, onEdit }: {
+  store: Store; catalog: CatObject[]; onDetails: (o: CatObject) => void; onAdd: () => void; onEdit: (p: ObsPrefill) => void
 }) {
   const { wishlist } = store
   const [setup, setSetup] = useState<string>('')
@@ -84,7 +85,8 @@ export default function Observations({ store, catalog, onDetails, onAdd }: {
                 <p key={s.id} className="note srow">
                   <span>{s.date} · <button className="title" onClick={() => o && onDetails(o)}><b>{o ? title(o) : w.id}</b></button> · {h(s.hours)}
                     {s.frames && s.exposure ? ` (${s.frames}×${s.exposure}s)` : ''} · {k}{s.note ? ` · ${s.note}` : ''}</span>
-                  <button className="lnk" onClick={() => confirm('Delete this observation?') && store.removeSession(w.id, s.id)}>delete</button>
+                  <span><button className="lnk" onClick={() => onEdit({ targetId: w.id, sessionId: s.id })}>edit</button>
+                  <button className="lnk" onClick={() => confirm('Delete this observation?') && store.removeSession(w.id, s.id)}>delete</button></span>
                 </p>
               )
             })}

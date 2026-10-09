@@ -6,9 +6,9 @@ import type { useStore } from '../lib/store'
 
 type Store = ReturnType<typeof useStore>
 
-export interface ObsPrefill { targetId?: string; date?: string; hours?: number }
+export interface ObsPrefill { targetId?: string; date?: string; hours?: number; sessionId?: string }
 
-/** Log an observation: what was imaged, when, with which setup, and how much integration time. */
+/** Log an observation (or edit one when `prefill.sessionId` is set): what was imaged, when, with which setup, and how much integration time. */
 export default function ObservationForm({ store, catalog, setup: defaultSetup, prefill, onClose }: {
   store: Store; catalog: CatObject[]; setup: string; prefill: ObsPrefill; onClose: () => void
 }) {
@@ -19,14 +19,15 @@ export default function ObservationForm({ store, catalog, setup: defaultSetup, p
     const w = wishlist.find((x) => x.id === id)
     return byId.get(id) ?? (w?.custom ? customObject(w.id, w.custom) : undefined)
   }
+  const editing = prefill.sessionId ? wishlist.find((w) => w.id === prefill.targetId)?.sessions?.find((x) => x.id === prefill.sessionId) : undefined
   const [target, setTarget] = useState<CatObject | undefined>(() => find(prefill.targetId))
   const [query, setQuery] = useState('')
-  const [date, setDate] = useState(prefill.date ?? nightNow(tzOf(loc)).night)
-  const [setup, setSetup] = useState(defaultSetup)
-  const [frames, setFrames] = useState('')
-  const [exposure, setExposure] = useState('')
-  const [hours, setHours] = useState(prefill.hours ? String(Math.round(prefill.hours * 100) / 100) : '')
-  const [note, setNote] = useState('')
+  const [date, setDate] = useState(editing?.date ?? prefill.date ?? nightNow(tzOf(loc)).night)
+  const [setup, setSetup] = useState(editing ? editing.setup ?? '' : defaultSetup)
+  const [frames, setFrames] = useState(editing?.frames ? String(editing.frames) : '')
+  const [exposure, setExposure] = useState(editing?.exposure ? String(editing.exposure) : '')
+  const [hours, setHours] = useState(editing ? String(editing.hours) : prefill.hours ? String(Math.round(prefill.hours * 100) / 100) : '')
+  const [note, setNote] = useState(editing?.note ?? '')
 
   const known = useMemo(() => [...new Set([defaultSetup, ...unitLabels(), ...wishlist.flatMap((w) => (w.sessions ?? []).flatMap((s) => (s.setup ? [s.setup] : [])))])], [defaultSetup, wishlist])
   const hits = useMemo(() => {
@@ -43,11 +44,17 @@ export default function ObservationForm({ store, catalog, setup: defaultSetup, p
 
   function save() {
     if (!target || !ok) return
-    if (!wishlist.some((w) => w.id === target.id)) store.addWish(target.id, { status: 'progress' })
-    store.addSession(target.id, {
+    const data = {
       date, hours: Math.round(total * 1000) / 1000, note,
-      ...(setup.trim() ? { setup: setup.trim() } : {}), ...(fromFrames ? { frames: f, exposure: e } : {}),
-    })
+      setup: setup.trim() || undefined, frames: fromFrames ? f : undefined, exposure: fromFrames ? e : undefined,
+    }
+    if (!wishlist.some((w) => w.id === target.id)) store.addWish(target.id, { status: 'progress' })
+    if (editing && prefill.targetId === target.id) store.patchSession(target.id, editing.id, data)
+    else {
+      // a different target: the observation moves over, keeping its id
+      if (editing && prefill.targetId) store.removeSession(prefill.targetId, editing.id)
+      store.addSession(target.id, { ...data, ...(editing ? { id: editing.id } : {}) })
+    }
     onClose()
   }
 
@@ -55,7 +62,7 @@ export default function ObservationForm({ store, catalog, setup: defaultSetup, p
   return (
     <div className="modal" onClick={onClose}>
       <div className="pick obs" onClick={(e) => e.stopPropagation()}>
-        <h2>Add observation<button onClick={onClose}>Close</button></h2>
+        <h2>{editing ? 'Edit observation' : 'Add observation'}<button onClick={onClose}>Close</button></h2>
 
         <label className="f"><span>Target</span>
           {target ? (
@@ -77,7 +84,7 @@ export default function ObservationForm({ store, catalog, setup: defaultSetup, p
           <input type="number" min={0} step="0.25" value={fromFrames ? (total).toFixed(2) : hours} readOnly={fromFrames} onChange={(e) => setHours(e.target.value)} placeholder="or enter hours" /></label>
         {fromFrames && <p className="note">{f} × {e}s = {total.toFixed(2)} h ({Math.round(total * 60)} min)</p>}
         <label className="f"><span>Note</span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Seeing, filter, issues… (optional)" /></label>
-        <div className="row"><span className="sp" /><button onClick={onClose}>Cancel</button><button className="pri" disabled={!ok} onClick={save}>Save observation</button></div>
+        <div className="row"><span className="sp" /><button onClick={onClose}>Cancel</button><button className="pri" disabled={!ok} onClick={save}>{editing ? 'Save changes' : 'Save observation'}</button></div>
       </div>
     </div>
   )

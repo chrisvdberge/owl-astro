@@ -7,7 +7,7 @@ import type { useStore } from '../lib/store'
 import type { Scope } from './FramingPreview'
 
 type Store = ReturnType<typeof useStore>
-const hrs = (h: number) => (h >= 200 ? '> 200 h' : h < 1 ? `${Math.max(1, Math.round(h * 60))} min` : `${h >= 20 ? Math.round(h) : h.toFixed(1)} h`)
+const hrs = (h: number) => (h >= 200 ? '> 200 h' : h < 1 ? `${Math.max(5, Math.round((h * 60) / 5) * 5)} min` : `${h >= 20 ? Math.round(h) : h.toFixed(1)} h`)
 
 /** Rough integration-time guide for a target with the default scope under the active location's sky. */
 export default function ExposurePlanner({ o, store, scope }: { o: CatObject; store: Store; scope: Scope }) {
@@ -63,8 +63,13 @@ export default function ExposurePlanner({ o, store, scope }: { o: CatObject; sto
           Use “good” as goal{wish?.goalHours ? ` (now ${wish.goalHours} h)` : ''}</button>
       </div>
       <p className="note fine">
-        Assumes the object at ~{est.mu.toFixed(1)} mag/arcsec² ({est.muSource}) under a {est.skyMag} mag/arcsec² sky; “decent / good / great” mean a signal-to-noise of 4 / 8 / 16 per pixel in the stack.
-        A mean value understates bright cores and overstates faint outskirts, so treat the numbers as a planning range.
+        {est.kind === 'cluster'
+          ? <>Clusters are bright: even a short stack shows them. More time mostly adds fainter stars and cleaner colour, so these are practical guides, not signal-to-noise targets.</>
+          : <>
+            Assumes {est.kind === 'emission' ? <>emission lines of about {Math.round(est.lines!)} R (typical for this kind of nebula, nudged by the catalogue) on top of </> : null}
+            the object at ~{est.mu.toFixed(1)} mag/arcsec² ({est.muSource}) under a {est.skyMag} mag/arcsec² sky; “decent / good / great” mean a signal-to-noise of {TIERS.map((t) => t.snr).join(' / ')} per pixel in the stack, and no estimate goes below {TIERS.map((t) => hrs(t.floor)).join(' / ')}.
+            A mean value understates bright cores and overstates faint outskirts, so treat the numbers as a planning range.
+          </>}
       </p>
     </section>
   )

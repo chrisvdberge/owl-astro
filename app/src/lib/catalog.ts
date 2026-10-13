@@ -22,7 +22,7 @@ export async function loadCatalog(): Promise<CatObject[]> {
   return res.json()
 }
 
-const norm = (s: string) => s.toLowerCase().replace(/[\s_-]+/g, '')
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9+]+/g, '')
 
 export const CATALOGS: { id: string; label: string; test: (o: CatObject) => boolean }[] = [
   { id: 'all', label: 'All catalogs', test: () => true },

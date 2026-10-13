@@ -45,6 +45,7 @@ export default function App() {
   const aladin = useRef<any>(null) // eslint-disable-line @typescript-eslint/no-explicit-any
   const overlay = useRef<any>(null) // eslint-disable-line @typescript-eslint/no-explicit-any
   const ground = useRef<any[]>([]) // eslint-disable-line @typescript-eslint/no-explicit-any
+  const figures = useRef<any[]>([]) // eslint-disable-line @typescript-eslint/no-explicit-any
   const [catalog, setCatalog] = useState<CatObject[]>([])
   const [query, setQuery] = useState('')
   const [catFilter, setCatFilter] = useState('all')
@@ -86,6 +87,7 @@ export default function App() {
   const navItems: [View, string][] = [['tonight', 'Tonight'], ['sky', 'Sky'], ['catalogue', 'Catalogue'], ['observations', 'Log'], ['inspector', 'Inspector'], ['planner', `Planner${store.wishlist.length ? ` (${store.wishlist.length})` : ''}`]]
   const goView = (v: View) => { setView(v); if (v !== 'sky') { setFrameSel(false); setMenu(null) } }
   const [hzOpen, setHzOpen] = useState(false)
+  const [showCon, setShowCon] = useState(() => { try { return localStorage.getItem('astroplanner.showConstellations') === '1' } catch { return false } })
   const [showHz, setShowHz] = useState(() => { try { return localStorage.getItem('astroplanner.showHorizon') !== '0' } catch { return true } })
   const [panel, setPanel] = useState<'left' | 'right' | null>(null)
 
@@ -181,6 +183,12 @@ export default function App() {
       })
       aladin.current.gotoRaDec(83.82, -5.39)
       aladin.current.setFoV(3.5)
+      // constellation stick figures and names, filled once constellations.json arrives
+      figures.current = [
+        A.graphicOverlay({ name: 'constellations', color: 'rgba(148,163,184,0.45)', lineWidth: 1 }),
+        A.catalog({ name: 'constellation names', shape: 'circle', sourceSize: 6, color: 'rgba(0,0,0,0)', displayLabel: true, labelColumn: 'name', labelColor: 'rgba(148,163,184,0.85)', labelFont: '12px sans-serif' }),
+      ]
+      aladin.current.addOverlay(figures.current[0]); aladin.current.addCatalog(figures.current[1])
       // ground below the site's horizon, its outline, and the minimum altitude (drawn under the frame)
       ground.current = [
         A.graphicOverlay({ name: 'ground', color: 'rgba(0,0,0,0)', lineWidth: 1 }),
@@ -234,6 +242,20 @@ export default function App() {
     }
     for (const corners of mosaicPanels(frame.ra, frame.dec, res.fovW, res.fovH, pa, mosaic.cols, mosaic.rows)) overlay.current.add(A.polygon(corners, { color: frameSel ? '#fbbf24' : '#38bdf8', lineWidth: frameSel ? 3 : 2 }))
   }, [ready, frame, res.fovW, res.fovH, pa, mosaic, frameSel, plan, session])
+
+  const [conData, setConData] = useState<{ name: string; label: [number, number]; lines: [number, number][][] }[] | null>(null)
+  useEffect(() => { if (showCon && !conData) fetch('/constellations.json').then((r) => r.json()).then(setConData).catch(() => {}) }, [showCon, conData])
+  useEffect(() => {
+    if (!ready || !conData) return
+    const [lines, names] = figures.current // filled once: the data never changes
+    for (const c of conData) for (const l of c.lines) lines.add(A.polyline(l))
+    names.addSources(conData.map((c) => A.source(c.label[0], c.label[1], { name: c.name })))
+  }, [ready, conData])
+  useEffect(() => {
+    if (!ready) return
+    for (const o of figures.current) { if (showCon) o.show(); else o.hide() }
+    try { localStorage.setItem('astroplanner.showConstellations', showCon ? '1' : '0') } catch { /* ignore */ }
+  }, [ready, showCon])
 
   // the local horizon at the viewed moment, projected onto the sky; follows the time slider and the site's horizon profile
   useEffect(() => {
@@ -561,6 +583,7 @@ export default function App() {
           <select value={survey} onChange={(e) => setSurvey(e.target.value)}>{SURVEYS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
         </label>
         <small className="note">{SURVEYS.find((s) => s.id === survey)?.note}</small>
+        <div><label className="note"><input type="checkbox" checked={showCon} onChange={(e) => setShowCon(e.target.checked)} /> Show constellations</label></div>
         <label className="f"><span>Overlay</span>
           <select value={overlayId} onChange={(e) => setOverlayId(e.target.value)}>
             <option value="none">None</option>{SURVEYS.filter((s) => s.id !== survey).map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}

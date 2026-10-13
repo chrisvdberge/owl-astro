@@ -13,3 +13,7 @@ See https://cds.unistra.fr/ for their acknowledgement requirements.
 
 The Herschel 400 membership list (`data/raw/herschel400.csv`) was extracted from the Wikipedia article
 "Herschel 400 Catalogue" (CC-BY-SA 4.0). Collinder/Melotte designations come from SIMBAD and the Dias open cluster catalog.
+
+Constellation stick figures and label positions (`app/public/constellations.json`, built by
+`app/scripts/build-constellations.mjs`) come from [d3-celestial](https://github.com/ofrohn/d3-celestial)
+by Olaf Frohn, BSD 3-Clause licence.

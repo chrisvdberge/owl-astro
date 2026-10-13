@@ -143,15 +143,6 @@ for (const r of csv('abell')) {
   extra.push(mk(`Abell ${num}`, 'PN', +r.ra, +r.dec, n(r.galdim_majaxis), undefined, { alt: [`PN A66 ${num}`] }))
 }
 
-// hand-picked popular names for objects that have none in OpenNGC
-const NAMES = {
-  'B 33': 'Horsehead Nebula (dark)', 'B 72': 'Snake Nebula', 'B 142': "Barnard's E (north)", 'B 143': "Barnard's E (south)",
-  'LDN 1622': 'Boogeyman Nebula', 'LDN 1235': 'Shark Nebula', 'vdB 141': 'Ghost Nebula', 'vdB 142': "Elephant's Trunk Nebula",
-  'Sh2-101': 'Tulip Nebula', 'Sh2-155': 'Cave Nebula', 'Sh2-132': 'Lion Nebula', 'Sh2-261': "Lower's Nebula",
-  'Sh2-240': 'Spaghetti Nebula', 'Sh2-129': 'Flying Bat Nebula', 'Sh2-308': 'Dolphin Head Nebula', 'Sh2-190': 'Heart Nebula',
-  'Sh2-199': 'Soul Nebula', 'Sh2-275': 'Rosette Nebula',
-}
-
 // cross-identify with OpenNGC objects at (almost) the same position, so searching "IC 1805" also finds Sh2-190
 const OLD_NEB = new Set(['HII', 'EmN', 'Neb', 'RfN', 'DrkN', 'PN', 'SNR', 'Cl+N'])
 const dist = (a, b) => {
@@ -161,7 +152,6 @@ const dist = (a, b) => {
 }
 let matched = 0
 for (const e of extra) {
-  if (NAMES[e.id]) e.names.push(NAMES[e.id])
   if (/^(Arp|HCG)/.test(e.id)) continue
   const tol = Math.max(3, 0.4 * (e.maj ?? 0))
   let best = null
@@ -224,6 +214,16 @@ for (const o of out) {
 }
 out.splice(0, out.length, ...out.filter((o) => !drop.has(o)))
 for (const o of out) delete o.add
+
+// hand-picked popular names (data/names.csv), applied to the final ids so any catalog can get a nickname
+for (const line of readFileSync(new URL('names.csv', dir), 'utf8').split('\n')) {
+  const l = line.trim()
+  if (!l || l.startsWith('#')) continue
+  const [id, names] = l.split(';')
+  const o = byId.get(id.trim()) ?? out.find((x) => x.id === id.trim())
+  if (!o) { console.warn(`names.csv: unknown id "${id}"`); continue }
+  o.names.push(...names.split(',').map((s) => s.trim()).filter(Boolean))
+}
 
 // verified sizes (arcmin) where the catalogs are badly off: the whole nebula, not just its cluster / brightest knot
 const SIZES = { 'NGC 7000': [120, 100], 'IC 1396': [170, 140], 'IC 1848': [150, 75], 'NGC 1909': [180, 60] }

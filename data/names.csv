@@ -1,0 +1,71 @@
+# Popular / nickname aliases, merged into catalog.json by app/scripts/build-catalog.mjs.
+# One object per line:  <catalog id>;<name>[,<name>…]
+# The id is the final catalog id as shown in the app (NGC 7331, IC 410, Sh2-155, B 33, Abell 21, HCG 92…).
+# Group names go on the member you'd frame (or on every member of a small group, so a search lists them all).
+# Search ignores case, spaces and punctuation and matches prefixes, so "deer lick" finds "Deer Lick Group".
+
+# --- dark nebulae / Sharpless / vdB that have no name in OpenNGC ---
+B 33;Horsehead Nebula (dark)
+B 72;Snake Nebula
+B 142;Barnard's E (north)
+B 143;Barnard's E (south)
+LDN 1622;Boogeyman Nebula
+LDN 1235;Shark Nebula
+vdB 141;Ghost Nebula
+vdB 142;Elephant's Trunk Nebula
+Sh2-101;Tulip Nebula
+Sh2-155;Cave Nebula
+Sh2-132;Lion Nebula
+Sh2-261;Lower's Nebula
+Sh2-240;Spaghetti Nebula
+Sh2-129;Flying Bat Nebula
+Sh2-308;Dolphin Head Nebula
+Sh2-190;Heart Nebula
+Sh2-199;Soul Nebula
+Sh2-275;Rosette Nebula
+
+# --- galaxy groups ---
+NGC 7331;Deer Lick Group
+NGC 3623;Leo Triplet
+NGC 3627;Leo Triplet
+NGC 3628;Leo Triplet,Hamburger Galaxy
+NGC 5981;Draco Trio
+NGC 5982;Draco Trio
+NGC 5985;Draco Trio
+NGC 4374;Markarian's Chain
+NGC 4406;Markarian's Chain
+NGC 4435;The Eyes,Markarian's Chain
+NGC 4438;The Eyes,Markarian's Chain
+NGC 7317;Stephan's Quintet
+NGC 7318;Stephan's Quintet
+NGC 7319;Stephan's Quintet
+NGC 7320;Stephan's Quintet
+
+# --- galaxies ---
+NGC 891;Silver Sliver Galaxy,Outer Limits Galaxy
+NGC 2683;UFO Galaxy
+NGC 4244;Silver Needle Galaxy
+NGC 4449;Box Galaxy
+NGC 4656;Hockey Stick Galaxy
+NGC 5907;Splinter Galaxy,Knife Edge Galaxy
+
+# --- nebulae ---
+NGC 281;Pacman Nebula
+NGC 1333;Embryo Nebula
+NGC 2024;Flame Nebula
+NGC 2174;Monkey Head Nebula
+NGC 2359;Thor's Helmet
+NGC 6334;Cat's Paw Nebula
+NGC 7380;Wizard Nebula
+IC 63;Ghost of Cassiopeia
+IC 410;Tadpoles Nebula
+IC 1795;Fishhead Nebula
+IC 2177;Seagull Nebula
+IC 2944;Running Chicken Nebula
+IC 4592;Blue Horsehead Nebula
+Abell 21;Medusa Nebula
+
+# --- clusters ---
+NGC 2169;37 Cluster
+NGC 2419;Intergalactic Wanderer
+NGC 7789;Caroline's Rose

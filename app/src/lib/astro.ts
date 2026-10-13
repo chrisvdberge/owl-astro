@@ -79,6 +79,16 @@ export function parallacticFromLst(latDeg: number, lst: number, raDeg: number, d
 }
 
 /** Moon illuminated fraction 0..1. */
+/** Inverse of targetAltAz: where on the sky (RA/Dec, degrees) an apparent alt/az points at a moment. */
+export function altAzToRaDec(l: Location, alt: number, az: number, t: Date): [ra: number, dec: number] {
+  const d = Math.PI / 180
+  const h = (alt + Astronomy.InverseRefraction('normal', alt)) * d
+  const A = az * d, phi = l.lat * d
+  const dec = Math.asin(Math.sin(phi) * Math.sin(h) + Math.cos(phi) * Math.cos(h) * Math.cos(A))
+  const ha = Math.atan2(-Math.sin(A) * Math.cos(h), Math.cos(phi) * Math.sin(h) - Math.sin(phi) * Math.cos(h) * Math.cos(A))
+  return [(((lstHours(l, t) * 15 - ha / d) % 360) + 360) % 360, dec / d]
+}
+
 export const moonIllum = (t: Date) => Astronomy.Illumination(Astronomy.Body.Moon, t).phase_fraction
 
 /** Angular separation in degrees between two RA/Dec positions (degrees). */

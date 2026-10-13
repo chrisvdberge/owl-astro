@@ -5,7 +5,7 @@ import { CAMERAS, PRESETS, SCOPES, compute, framingFit, mosaicPanels, rectCorner
 import { scopeName } from './components/FramingPreview'
 import { SURVEYS, defaultSurvey } from './lib/surveys'
 import * as Astronomy from 'astronomy-engine'
-import { lstHours, parallacticAngle, parallacticFromLst, sampleNight, separation, targetAltAz, type Location } from './lib/astro'
+import { altAzToRaDec, horizonAlt, lstHours, parallacticAngle, parallacticFromLst, sampleNight, separation, targetAltAz, type Location } from './lib/astro'
 import { useStore, type Status } from './lib/store'
 import { clockIn, nightNow, tzFromCoords, tzOf, zonedEpoch } from './lib/tz'
 import { useAuth } from './lib/auth'
@@ -44,6 +44,7 @@ export default function App() {
   const viewRef = useRef<HTMLDivElement>(null)
   const aladin = useRef<any>(null) // eslint-disable-line @typescript-eslint/no-explicit-any
   const overlay = useRef<any>(null) // eslint-disable-line @typescript-eslint/no-explicit-any
+  const ground = useRef<any[]>([]) // eslint-disable-line @typescript-eslint/no-explicit-any
   const [catalog, setCatalog] = useState<CatObject[]>([])
   const [query, setQuery] = useState('')
   const [catFilter, setCatFilter] = useState('all')
@@ -85,6 +86,7 @@ export default function App() {
   const navItems: [View, string][] = [['tonight', 'Tonight'], ['sky', 'Sky'], ['catalogue', 'Catalogue'], ['observations', 'Log'], ['inspector', 'Inspector'], ['planner', `Planner${store.wishlist.length ? ` (${store.wishlist.length})` : ''}`]]
   const goView = (v: View) => { setView(v); if (v !== 'sky') { setFrameSel(false); setMenu(null) } }
   const [hzOpen, setHzOpen] = useState(false)
+  const [showHz, setShowHz] = useState(() => { try { return localStorage.getItem('astroplanner.showHorizon') !== '0' } catch { return true } })
   const [panel, setPanel] = useState<'left' | 'right' | null>(null)
 
   const seeing = loc.seeing ?? 3
@@ -179,6 +181,13 @@ export default function App() {
       })
       aladin.current.gotoRaDec(83.82, -5.39)
       aladin.current.setFoV(3.5)
+      // ground below the site's horizon, its outline, and the minimum altitude (drawn under the frame)
+      ground.current = [
+        A.graphicOverlay({ name: 'ground', color: 'rgba(0,0,0,0)', lineWidth: 1 }),
+        A.graphicOverlay({ name: 'horizon', color: '#f97316', lineWidth: 2 }),
+        A.graphicOverlay({ name: 'min altitude', color: 'rgba(249,115,22,0.7)', lineWidth: 1, lineDash: [6, 5] }),
+      ]
+      for (const o of ground.current) aladin.current.addOverlay(o)
       overlay.current = A.graphicOverlay({ color: '#38bdf8', lineWidth: 2 })
       aladin.current.addOverlay(overlay.current)
       setReady(true)
@@ -225,6 +234,29 @@ export default function App() {
     }
     for (const corners of mosaicPanels(frame.ra, frame.dec, res.fovW, res.fovH, pa, mosaic.cols, mosaic.rows)) overlay.current.add(A.polygon(corners, { color: frameSel ? '#fbbf24' : '#38bdf8', lineWidth: frameSel ? 3 : 2 }))
   }, [ready, frame, res.fovW, res.fovH, pa, mosaic, frameSel, plan, session])
+
+  // the local horizon at the viewed moment, projected onto the sky; follows the time slider and the site's horizon profile
+  useEffect(() => {
+    if (!ready) return
+    const [fill, line, min] = ground.current
+    for (const o of ground.current) { o.removeAll(); o.reportChange() } // removeAll alone does not redraw
+    try { localStorage.setItem('astroplanner.showHorizon', showHz ? '1' : '0') } catch { /* ignore */ }
+    if (!showHz) return
+    const STEP = 3, SEG = 15 // degrees of azimuth per vertex / per shaded strip (each strip runs from the horizon down to the nadir)
+    const sky = (alt: number, az: number) => altAzToRaDec(loc, alt, az, when)
+    const hz = (az: number) => horizonAlt(loc.horizon, az)
+    for (let a0 = 0; a0 < 360; a0 += SEG) {
+      const azs: number[] = []
+      for (let az = a0; az <= a0 + SEG; az += STEP) azs.push(az)
+      const top = azs.map((az) => sky(hz(az), az))
+      const side = (az: number) => Array.from({ length: 8 }, (_, i) => sky(hz(az) + (-89.9 - hz(az)) * ((i + 1) / 8), az))
+      fill.add(A.polygon([...top, ...side(a0 + SEG), ...side(a0).reverse()], { fill: true, fillColor: 'rgba(120,60,15,0.32)', color: 'rgba(0,0,0,0)' }))
+      line.add(A.polyline(top))
+      if (minAlt > 0) {
+        min.add(A.polyline(azs.map((az) => sky(Math.max(minAlt, hz(az)), az))))
+      }
+    }
+  }, [ready, showHz, loc, when, minAlt])
 
   // click the frame to select it, then drag it; unselected, the sky pans as usual
   const live = useRef({ frame, fovW: res.fovW, fovH: res.fovH, rotation: pa, mosaic, sel: frameSel })
@@ -572,6 +604,7 @@ export default function App() {
         <label className="f"><span>Min altitude °</span><input type="number" min={0} max={80} value={minAlt} onChange={(e) => store.setSettings({ minAlt: +e.target.value })} /></label>
         <label className="f"><span>Time</span>
           <input type="range" min={0} max={900} step={10} value={tmin} onChange={(e) => setTmin(+e.target.value)} /><em>{clockIn(tzOf(loc), when.getTime())}</em></label>
+        <label className="note"><input type="checkbox" checked={showHz} onChange={(e) => setShowHz(e.target.checked)} /> Show the horizon on the sky</label>
         <div className="row"><button onClick={() => setMoment(nightNow(tzOf(loc)))}>Now</button>
           <small className="note">{target.label} at {Math.round(at.alt)}° alt, {Math.round(at.az)}° az</small></div>
         <AltitudeChart samples={samples} loc={loc} minAlt={minAlt} marker={tmin} onScrub={setTmin} />

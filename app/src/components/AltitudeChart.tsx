@@ -40,7 +40,7 @@ export default function AltitudeChart({ samples, loc, minAlt, stepMin = 10, mark
         {samples.map((s, i) => (s.usable ? <circle key={i} cx={x(i)} cy={y(s.alt)} r={1.8} className="ok" /> : null))}
         {marker !== undefined && <line x1={x(marker / stepMin)} x2={x(marker / stepMin)} y1={PAD.t} y2={H - PAD.b} className="now" />}
       </svg>
-      {!compact && <><p className="legend"><i className="k tgt" />Target <i className="k moon" />Moon <i className="k lim" />Min altitude / horizon <i className="k okd" />Usable</p>
+      {!compact && <><p className="legend"><i className="k tgt" />Target <i className="k moon" />Moon <i className="k lim" />Min altitude / horizon{loc.glow?.length ? " / light domes" : ""} <i className="k okd" />Usable</p>
       <dl>
         <dt>Usable time (sun &lt; −12°)</dt><dd>{info.hours.toFixed(1)} h</dd>
         <dt>Peak altitude</dt><dd>{info.peak.toFixed(0)}°</dd>

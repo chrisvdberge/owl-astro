@@ -18,8 +18,8 @@ const scoreColor = (s: number) => {
 const label = (o: CatObject) => (isCustom(o.id) ? o.names[0] : o.m ? `${o.m} · ${o.id}` : o.id)
 const fmt = (d: Date) => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
 
-export default function Planner({ store, catalog, onShow, onDetails, onLog }: { store: Store; catalog: CatObject[]; onShow: (o: CatObject, fid?: string) => void; onDetails: (o: CatObject) => void; onLog: (p: ObsPrefill) => void }) {
-  const [tab, setTab] = useState<'wishlist' | 'calendar'>('calendar')
+/** Your targets (`wishlist`: status, goals, progress) or the year calendar for them (`calendar`). */
+export default function Planner({ store, catalog, onShow, onDetails, onLog, mode: tab }: { store: Store; catalog: CatObject[]; onShow: (o: CatObject, fid?: string) => void; onDetails: (o: CatObject) => void; onLog: (p: ObsPrefill) => void; mode: 'wishlist' | 'calendar' }) {
   const [nights, setNights] = useState<EphemNight[] | null>(null)
   const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1) })
   const [picked, setPicked] = useState<number>(0)
@@ -56,8 +56,6 @@ export default function Planner({ store, catalog, onShow, onDetails, onLog }: { 
   return (
     <div className="planner">
       <div className="ptabs">
-        <button className={tab === 'calendar' ? 'on' : ''} onClick={() => setTab('calendar')}>Calendar</button>
-        <button className={tab === 'wishlist' ? 'on' : ''} onClick={() => setTab('wishlist')}>Wishlist ({wishlist.length})</button>
         <span className="note">{loc.name} · {wxError ? 'forecast unavailable' : cloud ? 'forecast loaded' : 'loading forecast…'} · min alt {settings.minAlt}° · ≥ {settings.minHours} h</span>
         <label className="f inl"><span>Min altitude</span><input type="number" value={settings.minAlt} onChange={(e) => store.setSettings({ minAlt: +e.target.value })} /></label>
         <label className="f inl"><span>Min hours</span><input type="number" step="0.5" value={settings.minHours} onChange={(e) => store.setSettings({ minHours: +e.target.value })} /></label>

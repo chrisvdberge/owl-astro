@@ -30,7 +30,6 @@ dl { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; margin: 0 0 
 .badge.over, .badge.mosaic { border-color: var(--bad); color: var(--bad); } .badge small { display: block; font-weight: 400; }
 @media (max-width: 900px) {
   .app { grid-template-columns: 1fr; }
-  header .nav, header .acctslot, header .tgt { display: none; }
   aside { position: fixed; z-index: 30; top: calc(44px + env(safe-area-inset-top)); bottom: 0; width: min(88vw, 340px); transform: translateX(-105%); transition: transform .2s; }
   aside.r { right: 0; left: auto; transform: translateX(105%); } aside.l { left: 0; }
   aside.open { transform: none; }
@@ -225,19 +224,16 @@ details.more { margin-top: 8px; } details.more summary { cursor: pointer; color:
 .ihist { display: grid; gap: 4px; } .ihrow { display: flex; align-items: center; gap: 10px; background: var(--panel); border-radius: 8px; padding: 4px 10px; } .ihrow > button:first-child { flex: 1; text-align: left; border: 0; background: none; display: grid; } .ihrow small { color: var(--mute); } .ihrow > span { color: var(--mute); font-size: 12.5px; }
 @media (max-width: 700px) { .insp .f.inl { grid-template-columns: 60px 1fr; } .istat b { font-size: 20px; } }
 
-/* header on phones: a hamburger menu instead of a row of buttons */
-header .sp { flex: 1; } header .burger, header .here { display: none; } header .burger { font-size: 18px; padding: 4px 12px; } header .here { color: var(--mute); font-size: 13px; align-items: center; }
+/* phones: the page name in the header; the sky view's Setup / Results panels open from floating buttons */
+header .sp { flex: 1; } header .here { display: none; color: var(--mute); font-size: 13px; align-items: center; }
 .mback { position: fixed; inset: 0; z-index: 44; background: rgba(0,0,0,.35); }
-.mmenu { position: fixed; z-index: 45; top: calc(44px + env(safe-area-inset-top) + 6px); right: max(8px, env(safe-area-inset-right)); width: min(340px, calc(100vw - 16px)); display: grid; gap: 6px; padding: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.55); max-height: calc(100vh - 80px); overflow-y: auto; }
-.mmenu button { text-align: left; padding: 11px 14px; font-size: 15px; } .mmenu button.on { border-color: var(--acc); color: var(--acc); } .mmenu hr { border: none; border-top: 1px solid var(--line); margin: 2px 0; } .macct { display: grid; } .macct .acct { margin: 0; text-align: left; padding: 11px 14px; font-size: 15px; }
+.macct { display: grid; } .macct .acct { margin: 0; text-align: left; padding: 11px 14px; font-size: 15px; }
 .fchips { display: none; }
 @media (max-width: 900px) {
-  header .burger, header .here { display: inline-flex; }
   .fchips { display: flex; gap: 8px; position: fixed; z-index: 28; right: max(12px, env(safe-area-inset-right)); bottom: calc(14px + env(safe-area-inset-bottom)); }
   .fchips button { background: rgba(17,24,39,.92); border-color: #3a4a66; padding: 9px 14px; border-radius: 20px; }
   .pv .fchips { display: none; }
 }
-@media (min-width: 901px) { .mmenu, .mback { display: none; } }
 .pmain { padding-bottom: calc(40px + env(safe-area-inset-bottom)); } aside { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
 
 /* gear planner */
@@ -291,3 +287,42 @@ header .sp { flex: 1; } header .burger, header .here { display: none; } header .
 .shome { padding: 3px 10px; } .shome.on, .sstar.on { color: var(--warn); border-color: var(--warn); } .sstar { padding: 0 7px; background: none; } .shz summary { cursor: pointer; margin: 8px 0; } .shz .hz { width: 100%; }
 .sadd { margin-top: 16px; } .shits { list-style: none; padding: 0; margin: 6px 0; border: 1px solid var(--line); border-radius: 6px; } .shits li { padding: 6px 9px; cursor: pointer; border-bottom: 1px solid var(--line); } .shits li:last-child { border-bottom: 0; } .shits li:hover { background: #172033; } .shits small { color: var(--mute); }
 .sleg { display: inline-block; width: 12px; height: 9px; border-radius: 2px; vertical-align: -1px; } .sleg.grey { background: rgba(148,163,184,.45); } .sleg.amber { background: rgba(251,191,36,.6); } .sleg.ring { border: 2px solid #fbbf24; border-radius: 50%; width: 10px; height: 10px; }
+
+/* navigation: five sections, a site switcher, a Setup menu; a bottom tab bar on phones */
+header { gap: 12px; } header a { color: inherit; text-decoration: none; }
+header .brand { font-weight: 600; margin-right: 6px; }
+header .nav { display: flex; gap: 2px; }
+header .nav a { padding: 6px 12px; border-radius: 7px; color: var(--mute); font-size: 14px; display: inline-flex; align-items: center; gap: 6px; }
+header .nav a:hover { color: var(--fg); background: #172033; } header .nav a.on { color: var(--fg); background: #1b2740; box-shadow: inset 0 -2px 0 var(--acc); }
+header .nav a small { font-size: 10.5px; color: var(--mute); background: #0b1220; border: 1px solid var(--line); border-radius: 9px; padding: 0 6px; }
+header .acct { margin-left: 0; }
+.pop { position: relative; } .pop > button { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; font-size: 13px; white-space: nowrap; } .pop > button.on { border-color: var(--acc); }
+.pop .car { color: var(--mute); font-size: 10px; } .setupm.cur > button { border-color: var(--acc); color: var(--acc); }
+.popmenu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 60; min-width: 240px; max-width: min(340px, calc(100vw - 16px)); display: grid; gap: 2px; padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,.55); }
+.popmenu button, .popmenu a { text-align: left; border: none; background: none; padding: 8px 10px; border-radius: 6px; display: grid; gap: 1px; color: var(--fg); text-decoration: none; }
+.popmenu button:hover, .popmenu a:hover { background: #172033; } .popmenu small { color: var(--mute); font-size: 11.5px; } .popmenu .poph { padding: 4px 10px 2px; text-transform: uppercase; letter-spacing: .1em; font-size: 10.5px; }
+.popmenu hr { border: none; border-top: 1px solid var(--line); margin: 4px 0; } .popmenu b { font-weight: 500; }
+.sitesw .popmenu button { grid-template-columns: 16px 1fr auto; align-items: center; column-gap: 6px; } .sitesw .popmenu button.sel { color: var(--acc); } .sitesw .star { color: var(--warn); } .sitesw .popmenu button:last-child { display: block; }
+.sitesw > button .pin { color: var(--acc); font-size: 10px; } .sitesw > button small { color: var(--mute); font-size: 11px; } .sitesw .sname { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.subnav { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; max-width: 1400px; margin: 0 auto 6px; } .subnav h2 { margin: 0 12px 0 0; } .subnav h2 small { color: var(--mute); font-size: 12px; font-weight: 400; margin-left: 8px; }
+.subnav a { color: var(--mute); text-decoration: none; padding: 5px 12px; border: 1px solid var(--line); border-radius: 16px; font-size: 13px; } .subnav a.on { color: var(--acc); border-color: var(--acc); }
+.settings { max-width: 640px; margin: 0 auto; } .settings .f { grid-template-columns: 180px 1fr; } .settings .f input, .settings .f select { grid-column: auto; } .settings a { color: var(--acc); }
+/* the sky view's target, over the map */
+.view { grid-row: 2; grid-column: 2; }
+.skytgt { grid-row: 2; grid-column: 2; align-self: start; justify-self: center; z-index: 5; margin-top: 46px; pointer-events: none; font-size: 12.5px; color: var(--fg); background: rgba(11,15,23,.78); border: 1px solid var(--line); border-radius: 14px; padding: 3px 12px; white-space: nowrap; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis; }
+.tabbar, .msheet { display: none; }
+@media (max-width: 900px) {
+  header .nav, header .setupm, header .acctslot { display: none; } header .here { display: inline-flex; } header .brand { font-size: 0; gap: 0; margin: 0; }
+  .view, .skytgt { grid-column: 1; }
+  .sitesw .sname { max-width: 130px; }
+  .tabbar { display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; z-index: 50; left: 0; right: 0; bottom: 0; background: var(--panel); border-top: 1px solid var(--line); padding: 4px max(4px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(4px, env(safe-area-inset-left)); }
+  .tabbar a, .tabbar button { display: grid; justify-items: center; gap: 1px; padding: 5px 0 6px; font-size: 11px; color: var(--mute); text-decoration: none; background: none; border: none; }
+  .tabbar i { font-style: normal; font-size: 18px; line-height: 1.2; } .tabbar .on { color: var(--acc); }
+  .msheet { display: grid; gap: 4px; position: fixed; z-index: 45; left: 8px; right: 8px; bottom: calc(60px + env(safe-area-inset-bottom)); padding: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 -8px 32px rgba(0,0,0,.5); }
+  .msheet a { display: grid; padding: 10px 14px; border-radius: 8px; color: var(--fg); text-decoration: none; } .msheet a.on { color: var(--acc); background: #172033; } .msheet small { color: var(--mute); font-size: 12px; }
+  .msheet .macct { padding: 4px 6px 0; border-top: 1px solid var(--line); }
+  aside { bottom: calc(58px + env(safe-area-inset-bottom)); }
+  .fchips { bottom: calc(70px + env(safe-area-inset-bottom)); }
+  .app { grid-template-rows: calc(44px + env(safe-area-inset-top)) 1fr calc(58px + env(safe-area-inset-bottom)); }
+  .settings .f { grid-template-columns: 1fr; }
+}

@@ -79,3 +79,14 @@ export function sexa(ra: number, dec: number): string {
   const p = (n: number) => String(n).padStart(2, '0')
   return `${p(hh)}h${p(mm)}m${p(ss)}s ${dec < 0 ? '−' : '+'}${p(dd)}°${p(dm)}′${p(ds)}″`
 }
+
+/** The URL form of a target: m31, ngc-7000, sh2-155, custom fields by their id. */
+export const slugOf = (o: { id: string; m: string | null }) => (isCustom(o.id) ? o.id : (o.m ?? o.id).toLowerCase().replace(/\s+/g, ''))
+const slugish = (s: string) => s.toLowerCase().replace(/[\s-]+/g, '')
+
+/** The target a slug names, among the catalogue and custom fields; accepts "ngc-7000", "ngc7000", "NGC 7000", "m31". */
+export function findBySlug(catalog: CatObject[], slug: string, extra: CatObject[] = []): CatObject | undefined {
+  if (isCustom(slug)) return extra.find((o) => o.id === slug)
+  const s = slugish(slug)
+  return catalog.find((o) => (o.m && slugish(o.m) === s) || slugish(o.id) === s) ?? extra.find((o) => slugish(o.id) === s)
+}

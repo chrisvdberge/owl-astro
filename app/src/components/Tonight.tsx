@@ -37,15 +37,18 @@ const addDays = (s: string, n: number) => { const d = parse(s); d.setDate(d.getD
 interface Cand { o: CatObject; w?: WishItem; r: NightResult; cloud?: number; eff: number }
 
 /** Night planner: pick a night, browse targets that are up, and lay them out on a clickable, draggable schedule. */
-export default function Tonight({ store, catalog, scope, onShow, onDetails, onSky, onLog }: {
+export default function Tonight({ store, catalog, scope, onShow, onDetails, onSky, onLog, night: chosen, onNight }: {
   store: Store; catalog: CatObject[]; scope: Scope
   onShow: (o: CatObject, fid?: string) => void; onDetails: (o: CatObject) => void; onSky: () => void; onLog: (p: ObsPrefill) => void
+  /** the night shown (YYYY-MM-DD, from the URL); tonight when absent */
+  night?: string; onNight: (night: string | undefined) => void
 }) {
   const { active: loc, settings, wishlist, plan } = store
   const tz = tzOf(loc)
   const { cloud, error: wxError } = useCloud(loc)
   const today = useMemo(() => nightNow(tz).night, [tz])
-  const [night, setNight] = useState(today)
+  const night = chosen && /^\d{4}-\d{2}-\d{2}$/.test(chosen) ? chosen : today
+  const setNight = (n: string) => onNight(n === today ? undefined : n)
   const [stripOff, setStripOff] = useState(0)
   const [filter, setFilter] = useState('all')
   const [query, setQuery] = useState('')

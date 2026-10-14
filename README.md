@@ -1,7 +1,8 @@
 # Owl Astro
 
 Astrophotography planner: sky surveys with a field-of-view overlay, saved locations with a horizon profile,
-a Messier/NGC wishlist, and a calendar that ranks your targets per night (altitude, moon, cloud forecast).
+a Messier/NGC wishlist, a calendar that ranks your targets per night (altitude, moon, cloud forecast), a gear planner
+that compares telescopes and cameras, and a site view with light pollution and light domes from the Light Pollution Atlas.
 Requirements: [REQUIREMENTS.md](REQUIREMENTS.md).
 
 ## Run it

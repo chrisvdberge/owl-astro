@@ -1,7 +1,7 @@
 import * as Astronomy from 'astronomy-engine'
 import type { Optics } from './optics'
 import { tzOf, zonedEpoch } from './tz'
-import { horizonAlt, moonIllum, separation, type Location } from './astro'
+import { limitAlt, moonIllum, separation, type Location } from './astro'
 
 /** `scope`: the user's default telescope + camera (account setting); the app falls back to the Seestar S50 Pro preset. */
 export interface Settings { minAlt: number; minHours: number; scope?: { presetId: string; optics: Optics } }
@@ -77,7 +77,7 @@ export function scoreNights(loc: Location, target: Target, nights: EphemNight[],
     const usable: boolean[] = []
     for (const e of n.samples) {
       const hz = Astronomy.Horizon(new Date(e.t), obs, target.ra / 15, target.dec, 'normal')
-      const ok = e.sun < -12 && hz.altitude >= Math.max(s.minAlt, horizonAlt(loc.horizon, hz.azimuth))
+      const ok = e.sun < -12 && hz.altitude >= limitAlt(loc, hz.azimuth, s.minAlt)
       usable.push(ok)
       if (!ok) continue
       const w = STEP_MIN / 60

@@ -17,3 +17,7 @@ The Herschel 400 membership list (`data/raw/herschel400.csv`) was extracted from
 Constellation stick figures and label positions (`app/public/constellations.json`, built by
 `app/scripts/build-constellations.mjs`) come from [d3-celestial](https://github.com/ofrohn/d3-celestial)
 by Olaf Frohn, BSD 3-Clause licence.
+
+Light-pollution figures and map tiles on the Site view are read directly from David J. Lorenz's
+[Light Pollution Atlas](https://djlorenz.github.io/astronomy/lp/) (2025 edition, VIIRS data from the Earth Observation Group,
+Colorado School of Mines). Base map © Esri (World Dark Gray Canvas); town names from OpenStreetMap Nominatim.

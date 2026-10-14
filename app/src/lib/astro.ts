@@ -13,6 +13,7 @@ export interface Location {
   seeing?: number // typical seeing in arcsec at this site (default 3)
   tz?: string // IANA time zone of the site (default: browser zone)
   bortle?: number // sky darkness 1 (darkest) .. 9, for exposure estimates
+  glow?: number[] // light domes: altitude (deg) to stay above per 10° of azimuth (0, 10, … 350), from the light-pollution atlas
 }
 
 /** Gaps wider than this between two points are open sky: the horizon ramps down to 0° beside each point. */
@@ -42,6 +43,16 @@ export function horizonAlt(h: HorizonPoint[], az: number): number {
   }
   return 0
 }
+
+/** Altitude a light dome reaches at an azimuth (interpolated between the 10° steps; 0 without a glow profile). */
+export function glowAlt(g: number[] | undefined, az: number): number {
+  if (!g?.length) return 0
+  const a = (((az % 360) + 360) % 360) / 10, i = Math.floor(a) % 36, f = a - Math.floor(a)
+  return g[i] * (1 - f) + g[(i + 1) % 36] * f
+}
+
+/** The lowest altitude worth imaging at an azimuth: the planning minimum, the local horizon and any light dome there. */
+export const limitAlt = (l: Location, az: number, minAlt: number) => Math.max(minAlt, horizonAlt(l.horizon, az), glowAlt(l.glow, az))
 
 const observer = (l: Location) => new Astronomy.Observer(l.lat, l.lon, l.elevation)
 
@@ -109,7 +120,7 @@ export function sampleNight(l: Location, ra: number, dec: number, day: Date, ste
     const { alt, az } = targetAltAz(l, ra, dec, t)
     const sun = sunAlt(l, t)
     const moon = moonAltAz(l, t).alt
-    const usable = sun < -12 && alt >= Math.max(minAlt, horizonAlt(l.horizon, az))
+    const usable = sun < -12 && alt >= limitAlt(l, az, minAlt)
     out.push({ t, alt, az, sun, moon, usable })
   }
   return out

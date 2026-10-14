@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import A from 'aladin-lite'
 import { CATALOGS, catalogTag, customObject, isCustom, loadCatalog, searchCatalog, sexa, type CatObject, type CustomTarget } from './lib/catalog'
-import { CAMERAS, PRESETS, SCOPES, compute, framingFit, mosaicPanels, rectCorners, sessionCrop, type Optics } from './lib/optics'
+import { CAMERAS, findCamera, PRESETS, SCOPES, SEEING, compute, framingFit, mosaicPanels, rectCorners, sessionCrop, type Optics } from './lib/optics'
 import { scopeName } from './components/FramingPreview'
 import { SURVEYS, defaultSurvey } from './lib/surveys'
 import * as Astronomy from 'astronomy-engine'
@@ -24,15 +24,13 @@ import { DEFAULT_BORTLE } from './lib/exposure'
 import { cropAtDepth } from './lib/depth'
 import Observations from './components/Observations'
 import Inspector from './components/Inspector'
+import GearPlanner from './components/GearPlanner'
+import SiteView from './components/SiteView'
 import ObservationForm, { type ObsPrefill } from './components/ObservationForm'
 import { setupLabel } from './lib/gear'
 
-const SEEING = [
-  { v: 1.5, l: '1.5″ — Excellent' }, { v: 2, l: '2″ — Good' }, { v: 3, l: '3″ — Average backyard' },
-  { v: 4, l: '4″ — Poor' }, { v: 5, l: '5″ — Bad' },
-]
 
-type View = 'sky' | 'planner' | 'tonight' | 'catalogue' | 'observations' | 'inspector'
+type View = 'sky' | 'planner' | 'tonight' | 'catalogue' | 'observations' | 'inspector' | 'gear' | 'site'
 const nameOf = (o: CatObject) => (isCustom(o.id) ? o.names[0] : o.m ?? o.id)
 const LOOK_KEY = 'astroplanner.look'
 const NEUTRAL = { brightness: 0, contrast: 0, saturation: 0, gamma: 1 }
@@ -84,7 +82,7 @@ export default function App() {
   // opens on Tonight once there is something on the wishlist to plan
   const [view, setView] = useState<View>(() => (store.wishlist.some((w) => w.status !== 'done') ? 'tonight' : 'sky'))
   const [menuOpen, setMenuOpen] = useState(false)
-  const navItems: [View, string][] = [['tonight', 'Tonight'], ['sky', 'Sky'], ['catalogue', 'Catalogue'], ['observations', 'Log'], ['inspector', 'Inspector'], ['planner', `Planner${store.wishlist.length ? ` (${store.wishlist.length})` : ''}`]]
+  const navItems: [View, string][] = [['tonight', 'Tonight'], ['sky', 'Sky'], ['catalogue', 'Catalogue'], ['site', 'Site'], ['observations', 'Log'], ['inspector', 'Inspector'], ['gear', 'Gear'], ['planner', `Planner${store.wishlist.length ? ` (${store.wishlist.length})` : ''}`]]
   const goView = (v: View) => { setView(v); if (v !== 'sky') { setFrameSel(false); setMenu(null) } }
   const [hzOpen, setHzOpen] = useState(false)
   const [showCon, setShowCon] = useState(() => { try { return localStorage.getItem('astroplanner.showConstellations') === '1' } catch { return false } })
@@ -97,7 +95,7 @@ export default function App() {
   const aio = AIO.find((p) => p.id === presetId)
   const near = (a: number, b: number) => Math.abs(a - b) < 1e-6
   const scopeSel = aio?.id ?? SCOPES.find((t) => near(t.apertureMm, optics.apertureMm) && near(t.focalLengthMm, optics.focalLengthMm))?.id ?? ''
-  const cameraSel = aio?.id ?? CAMERAS.find((c) => near(c.sensorWmm, optics.sensorWmm) && near(c.sensorHmm, optics.sensorHmm) && near(c.pixelUm, optics.pixelUm))?.id ?? ''
+  const cameraSel = aio?.id ?? findCamera(optics)?.id ?? ''
   function pickGear(side: 'scope' | 'camera', id: string) {
     const unit = AIO.find((p) => p.id === id)
     if (unit) { setPresetId(unit.id); setOptics(unit.optics); setBlocked(side === 'scope' ? 'camera' : 'scope'); return }
@@ -107,7 +105,7 @@ export default function App() {
       if (t) setOptics({ ...optics, apertureMm: t.apertureMm, focalLengthMm: t.focalLengthMm, reducer: 1 })
     } else {
       const c = CAMERAS.find((x) => x.id === id)
-      if (c) setOptics({ ...optics, sensorWmm: c.sensorWmm, sensorHmm: c.sensorHmm, pixelUm: c.pixelUm, qe: c.qe, readNoise: c.readNoise })
+      if (c) setOptics({ ...optics, sensorWmm: c.sensorWmm, sensorHmm: c.sensorHmm, pixelUm: c.pixelUm, qe: c.qe, readNoise: c.readNoise, fullWell: c.fullWell, bits: c.bits })
     }
   }
   // the account's default telescope + camera; the Seestar S50 Pro until the user picks another
@@ -752,6 +750,8 @@ export default function App() {
       {view === 'catalogue' && <main className="pmain"><Catalogue store={store} catalog={catalog} scope={defaultScope} onDetails={setDetail} onShow={show} /></main>}
       {view === 'observations' && <main className="pmain"><Observations store={store} catalog={catalog} onDetails={setDetail} onAdd={() => setObs({})} onEdit={setObs} /></main>}
       {view === 'inspector' && <main className="pmain"><Inspector store={store} catalog={catalog} scope={defaultScope} /></main>}
+      {view === 'site' && <main className="pmain"><SiteView store={store} /></main>}
+      {view === 'gear' && <main className="pmain"><GearPlanner store={store} catalog={catalog} scope={defaultScope} /></main>}
       {view === 'planner' && <main className="pmain"><Planner store={store} catalog={catalog} onShow={show} onDetails={setDetail} onLog={setObs} /></main>}
       <aside className={`l ${panel === 'left' ? 'open' : ''}`}>{left}</aside>
       <div className="view" ref={viewRef} />

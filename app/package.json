@@ -12,8 +12,10 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.3",
+    "@types/leaflet": "^1.9.22",
     "aladin-lite": "^3.9.2-beta",
     "astronomy-engine": "^2.1.19",
+    "leaflet": "^1.9.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "tz-lookup": "^6.1.25"

@@ -83,8 +83,8 @@ export function milkyWayOf(sqm: number) {
 export interface Dome { az: number; distKm: number; lat: number; lon: number; peak: number; weight: number; name?: string }
 export interface SiteSky {
   ratio: number; sqm: number
-  /** brightness of light domes near the horizon per degree of azimuth, in units of the natural sky */
-  glow0: Float32Array
+  /** brightness the light domes add at an azimuth and altitude (deg), in units of the natural zenith sky */
+  glow: (az: number, alt: number) => number
   /** altitude (deg) a light dome reaches per 10° of azimuth (0, 10, … 350): where it fades into the general sky */
   domeAlt: number[]
   domes: Dome[]
@@ -92,9 +92,17 @@ export interface SiteSky {
 
 const KM_PER_DEG = 111.2
 const MIN_KM = 3, MAX_KM = 150
-/** Light domes fade with altitude roughly exponentially, by e every A0 degrees; they look this much brighter low down than the zenith glow they cause. */
-export const A0 = 10
+/** Domes look this much brighter low down than the zenith glow they cause. */
 const HORIZON_GAIN = 5
+/**
+ * A dome fades with altitude by e every a0 degrees, and a0 depends on distance: light scattered a few km up over a town
+ * stands high in the sky from nearby and low from far away (a0 ≈ the angle of SCATTER_KM at that distance, at least A0_MIN).
+ */
+const SCATTER_KM = 2, A0_MIN = 7
+const DIST_BINS = [3, 6, 12, 25, 50, 100, 150]
+const a0Of = (km: number) => Math.max(A0_MIN, (Math.atan(SCATTER_KM / km) * 180) / Math.PI)
+/** A dome counts where it adds at least this share to the sky behind it (≈ +0.45 mag: a gradient you see in a stack). */
+export const DOME_LEVEL = 0.5
 
 /** Brightness of the natural plus uniform artificial sky at an altitude, relative to the natural zenith (van Rhijn: longer path low down). */
 export const vanRhijn = (alt: number) => 1 / Math.sqrt(1 - 0.93 * Math.cos((alt * Math.PI) / 180) ** 2)
@@ -103,7 +111,7 @@ export const vanRhijn = (alt: number) => 1 / Math.sqrt(1 - 0.93 * Math.cos((alt 
  * The sky around a site: zenith brightness from the atlas, and where the light domes are. Every grid point within 150 km that
  * is brighter than the site counts as a source in its direction, weighted by its excess brightness over the site and Walker's
  * law (glow ∝ distance^-2.5). The share of each direction in that sum is scaled to the site's own artificial glow, so a site
- * under a dark sky gets low domes and one near a city high ones. Rough by nature: the atlas is already smoothed, and terrain,
+ * under a dark sky gets low domes and one near a city high ones; nearby towns' domes reach higher than distant ones. Rough by nature: the atlas is already smoothed, and terrain,
  * shielding and haze are not modelled.
  */
 export async function analyseSite(lat: number, lon: number): Promise<SiteSky | null> {
@@ -114,7 +122,9 @@ export async function analyseSite(lat: number, lon: number): Promise<SiteSky | n
   for (const la of [lat - dLat, lat, lat + dLat]) for (const lo of [lon - dLon, lon, lon + dLon]) { const t = tileOf(la, lo); keys.set(`${t.tx}_${t.ty}`, t) }
   const loaded = await Promise.all([...keys.values()].map(async (k) => ({ ...k, data: await tile(k.tx, k.ty) })))
 
-  const bins = new Float64Array(360)
+  const NB = DIST_BINS.length - 1
+  const bins = new Float64Array(NB * 360)
+  const binOf = (km: number) => { let k = 0; while (k < NB - 1 && km >= DIST_BINS[k + 1]) k++; return k }
   const peaks: Dome[] = []
   for (const { tx, ty, data } of loaded) {
     if (!data) continue
@@ -131,7 +141,7 @@ export async function analyseSite(lat: number, lon: number): Promise<SiteSky | n
         if (d < MIN_KM || d > MAX_KM) continue
         const w = (v - ratio) * d ** -2.5
         const az = mod((Math.atan2(dx * kmLon, dy) * 180) / Math.PI, 360)
-        bins[Math.floor(az) % 360] += w
+        bins[binOf(d) * 360 + (Math.floor(az) % 360)] += w
         // local maxima (over the 5 × 5 neighbourhood) are the towns behind the domes
         if (r > 1 && r < N - 2 && c > 1 && c < N - 2 && v > Math.max(1, ratio * 1.3)) {
           let top = true
@@ -142,19 +152,24 @@ export async function analyseSite(lat: number, lon: number): Promise<SiteSky | n
     }
   }
   const total = bins.reduce((a, b) => a + b, 0)
-  // spread each degree over ±8° (a town is not a point, and the eye blends neighbouring domes)
-  const glow0 = new Float32Array(360)
-  if (total > 0) {
-    const sm = new Float64Array(360)
-    for (let a = 0; a < 360; a++) { let s = 0, n = 0; for (let k = -8; k <= 8; k++) { const wk = 1 - Math.abs(k) / 9; s += bins[mod(a + k, 360)] * wk; n += wk } sm[a] = s / n }
-    for (let a = 0; a < 360; a++) glow0[a] = ratio * HORIZON_GAIN * 360 * (sm[a] / total)
+  // spread each degree over ±8° (a town is not a point, and the eye blends neighbouring domes); scale to the site's own glow
+  const g0 = new Float32Array(NB * 360)
+  if (total > 0) for (let k = 0; k < NB; k++) for (let a = 0; a < 360; a++) {
+    let sum = 0, n = 0
+    for (let t = -8; t <= 8; t++) { const wt = 1 - Math.abs(t) / 9; sum += bins[k * 360 + mod(a + t, 360)] * wt; n += wt }
+    g0[k * 360 + a] = ratio * HORIZON_GAIN * 360 * (sum / n / total)
+  }
+  const a0s = DIST_BINS.slice(0, NB).map((d, k) => a0Of(Math.sqrt(d * DIST_BINS[k + 1])))
+  const glow = (az: number, alt: number) => {
+    const x = mod(az, 360), a = Math.floor(x) % 360, b = (a + 1) % 360, f = x - Math.floor(x)
+    let g = 0
+    for (let k = 0; k < NB; k++) g += (g0[k * 360 + a] * (1 - f) + g0[k * 360 + b] * f) * Math.exp(-alt / a0s[k])
+    return g
   }
   const domeAlt = Array.from({ length: 36 }, (_, i) => {
-    let g = 0
-    for (let k = -5; k < 5; k++) g = Math.max(g, glow0[mod(i * 10 + k, 360)])
-    // where the dome has faded to the brightness of the rest of the sky at that height
+    // the highest altitude where any azimuth in this 10° step still carries a dome
     let alt = 0
-    for (let a = 0; a <= 70; a++) if (g * Math.exp(-a / A0) > (1 + ratio) * vanRhijn(a)) alt = a
+    for (let az = i * 10 - 5; az < i * 10 + 5; az++) for (let a = alt + 1; a <= 80; a++) if (glow(az, a) > DOME_LEVEL * (1 + ratio) * vanRhijn(a)) alt = a
     return alt
   })
   // one dome per direction: keep the strongest peak, weighted by what it adds to the glow, and drop others within 12° of it
@@ -166,7 +181,7 @@ export async function analyseSite(lat: number, lon: number): Promise<SiteSky | n
     domes.push(p)
     if (domes.length >= 6) break
   }
-  return { ratio, sqm: sqmOf(ratio), glow0, domeAlt, domes: domes.filter((d) => d.weight > domes[0].weight * 0.08) }
+  return { ratio, sqm: sqmOf(ratio), glow, domeAlt, domes: domes.filter((d) => d.weight > domes[0].weight * 0.08) }
 }
 
 /** Compass point for an azimuth. */

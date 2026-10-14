@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { customObject, isCustom, type CatObject } from '../lib/catalog'
 import TargetInfo from './TargetInfo'
+import { gearNames } from '../lib/gear'
+import { PRESETS } from '../lib/optics'
 import type { ObsPrefill } from './ObservationForm'
 import type { useStore } from '../lib/store'
 import { tzOf, todayIn } from '../lib/tz'
@@ -26,6 +28,7 @@ export default function Planner({ store, catalog, onShow, onDetails, onLog, mode
   const [onlyOpen, setOnlyOpen] = useState(true)
   const [useWx, setUseWx] = useState(true)
   const { active: loc, settings, wishlist } = store
+  const defaultScope = settings.scope ?? { presetId: PRESETS[0].id, optics: PRESETS[0].optics }
 
   const { cloud, error: wxError } = useCloud(loc)
   const byId = useMemo(() => new Map(catalog.map((o) => [o.id, o])), [catalog])
@@ -102,7 +105,7 @@ export default function Planner({ store, catalog, onShow, onDetails, onLog, mode
                 ? <figure key={f.id} onClick={() => onShow(o, f.id)} title="Open this framing on the sky"><img className="thumb sm" src={f.thumb} alt={f.name} /><figcaption>{f.name}</figcaption></figure>
                 : <button key={f.id} className="lnk" onClick={() => onShow(o, f.id)}>{f.name}</button>)}</div>
             )}
-            <More title="About & example images"><TargetInfo o={o} /></More>
+            <More title="About & example images"><TargetInfo o={o} gear={gearNames(defaultScope.optics, defaultScope.presetId)} /></More>
             <input className="notes" placeholder="Notes" value={w.notes} onChange={(e) => store.patchWish(w.id, { notes: e.target.value })} />
             <Sessions w={w} store={store} onLog={onLog} />
           </div>

@@ -1,15 +1,19 @@
 import { useState } from 'react'
 import { catalogTag, isCustom, type CatObject } from '../lib/catalog'
 import { useImages, type Img } from '../lib/images'
+import { astrobinSubject, astrobinText } from '../lib/astrobin'
 
 const enc = encodeURIComponent
 
 /** Search links for places that have far more pictures (and amateur results) than any one API. */
-function links(o: CatObject) {
+function links(o: CatObject, gear: string[]) {
   const ident = isCustom(o.id) ? o.names[0] : o.m ?? o.id
   const q = [ident, !isCustom(o.id) ? o.names[0] : ''].filter(Boolean).join(' ')
+  // with your gear: the whole setup, plus the telescope alone when a camera narrows it further
+  const setups = gear.length > 1 ? [gear, gear.slice(0, 1)] : gear.length ? [gear] : []
   return [
-    { label: 'AstroBin', href: `https://app.astrobin.com/search?q=${enc(ident)}` },
+    { label: 'AstroBin', href: isCustom(o.id) ? astrobinText(ident) : astrobinSubject(ident) },
+    ...setups.map((g) => ({ label: `AstroBin · ${g.join(' + ')}`, href: astrobinText(`${ident} ${g.join(' ')}`) })),
     { label: 'Google Images', href: `https://www.google.com/search?tbm=isch&q=${enc(q + ' astrophotography')}` },
     ...(isCustom(o.id) ? [] : [
       { label: 'SIMBAD', href: `https://simbad.cds.unistra.fr/simbad/sim-id?Ident=${enc(o.id)}` },
@@ -19,7 +23,8 @@ function links(o: CatObject) {
 }
 
 /** Facts, search links and example images for a catalog object (or custom field). `lazy` waits for `open` before fetching images. */
-export default function TargetInfo({ o, open = true, compact = false }: { o: CatObject; open?: boolean; compact?: boolean }) {
+/** `gear` names the telescope / camera in use (see gearNames) for AstroBin links to images taken with the same setup. */
+export default function TargetInfo({ o, open = true, compact = false, gear = [] }: { o: CatObject; open?: boolean; compact?: boolean; gear?: string[] }) {
   const { images, loading, error } = useImages(o, open)
   const [view, setView] = useState<Img | null>(null)
   const aka = [o.m, ...o.names.slice(1), ...o.alt].filter((x): x is string => !!x && x !== o.id).slice(0, 6)
@@ -30,7 +35,7 @@ export default function TargetInfo({ o, open = true, compact = false }: { o: Cat
         {o.mag != null && ` · mag ${o.mag}`}{o.maj ? ` · ${o.maj}′${o.min ? ` × ${o.min}′` : ''}` : ''}{o.sb != null && ` · ${o.sb} mag/arcsec²`}
         {aka.length > 0 && <><br />Also: {aka.join(', ')}</>}
       </p>}
-      <div className="chips">{links(o).map((l) => <a key={l.label} className="chip" href={l.href} target="_blank" rel="noreferrer">{l.label} ↗</a>)}</div>
+      <div className="chips">{links(o, gear).map((l) => <a key={l.label} className="chip" href={l.href} target="_blank" rel="noreferrer">{l.label} ↗</a>)}</div>
       {!isCustom(o.id) && (
         <>
           {loading && <p className="note">Looking for example images…</p>}

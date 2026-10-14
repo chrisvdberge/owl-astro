@@ -9,6 +9,7 @@ import { useSummary } from '../lib/wiki'
 import AltitudeChart from './AltitudeChart'
 import TargetInfo from './TargetInfo'
 import { filterAdvice } from '../lib/filters'
+import { gearNames } from '../lib/gear'
 import FramingPreview, { type Scope } from './FramingPreview'
 import ExposurePlanner from './ExposurePlanner'
 
@@ -112,7 +113,7 @@ export default function TargetDetail({ o, store, scope, onClose, onShow, onPlann
           {peak ? `Tonight peaks ${Math.round(peak.alt)}° around ${clockIn(tz, peak.t.getTime())}${peak.alt < minAlt ? ` — below your ${minAlt}° minimum` : ''}` : 'No astronomical darkness tonight at this location'}
         </p>
 
-        <TargetInfo o={o} compact />
+        <TargetInfo o={o} compact gear={gearNames(scope.optics, scope.presetId)} />
 
         {wish && <textarea className="notes" rows={2} placeholder="Notes" value={wish.notes} onChange={(e) => store.patchWish(o.id, { notes: e.target.value })} />}
 

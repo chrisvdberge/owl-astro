@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { horizonAlt, type Location } from '../lib/astro'
-import { A0, LP_CREDIT, LP_TILES, analyseSite, bortleOf, compass, lpRatio, milkyWayOf, nelmOf, placeName, sqmOf, starsOf, vanRhijn, zoneOf, type SiteSky } from '../lib/lightpollution'
+import { DOME_LEVEL, LP_CREDIT, LP_TILES, analyseSite, bortleOf, compass, lpRatio, milkyWayOf, nelmOf, placeName, sqmOf, starsOf, vanRhijn, zoneOf, type SiteSky } from '../lib/lightpollution'
 import { tzFromCoords, tzOf } from '../lib/tz'
 import { elevationAt, searchPlaces, type Place } from '../lib/places'
 import { DEFAULT_BORTLE } from '../lib/exposure'
@@ -27,8 +27,8 @@ const ramp = (stops: [number, string][]) => {
 }
 /** The atlas colours, continuous in log brightness and extended past its brightest zone so city skies still show their domes. */
 const atlasColor = ((r) => (ratio: number) => r(Math.log10(1 + ratio)))(ramp(([[0, '#000000'], [0.03, '#222222'], [0.085, '#424242'], [0.15, '#142f72'], [0.26, '#2154d8'], [0.45, '#0f5714'], [0.78, '#1fa12a'], [1.35, '#6e641e'], [2.3, '#b8a625'], [4, '#bf641e'], [7, '#fd9650'], [12, '#fb5a49'], [21, '#fb998a'], [36, '#a0a0a0'], [60, '#f2f2f2'], [250, '#fff3b0']] as [number, string][]).map(([v, h]) => [Math.log10(1 + v), h])))
-/** How much brighter than the zenith (magnitudes): dark blue at the zenith's level, through green and yellow to white 3 mag brighter. */
-const contrastColor = ramp([[0, '#0b1a3a'], [0.4, '#1d4ed8'], [1, '#16a34a'], [1.8, '#facc15'], [3, '#fff7d6']])
+/** How much the light domes brighten the sky (magnitudes) over a dome-free sky at the same altitude: dark blue for nothing, green at a dome's edge (+0.45), white at +2 mag. */
+const contrastColor = ramp([[0, '#0b1a3a'], [0.15, '#1d4ed8'], [0.45, '#16a34a'], [1, '#facc15'], [2, '#fff7d6']])
 
 /** Zenith sky quality figures for one point. */
 function Quality({ ratio, compact }: { ratio: number; compact?: boolean }) {
@@ -48,8 +48,9 @@ function Quality({ ratio, compact }: { ratio: number; compact?: boolean }) {
 }
 
 /**
- * The site's sky seen from below (north up, east left): light domes from the atlas on top of the natural sky, which brightens
- * towards the horizon. The physical horizon is shaded; the dashed amber line is the altitude each dome reaches.
+ * The site's sky as an all-sky compass, laid out like the map (north up, east right; the horizon on the rim, the zenith in the
+ * middle): light domes from the atlas on top of the sky, which brightens towards the horizon anyway. The physical horizon is
+ * shaded; the dashed amber line is the altitude each dome reaches.
  */
 function DomeChart({ sky, loc, minAlt, mode }: { sky: SiteSky; loc: Location; minAlt: number; mode: 'atlas' | 'contrast' }) {
   const ref = useRef<HTMLCanvasElement>(null)
@@ -62,16 +63,16 @@ function DomeChart({ sky, loc, minAlt, mode }: { sky: SiteSky; loc: Location; mi
       const dx = x - C, dy = y - C, rr = Math.hypot(dx, dy)
       if (rr > R) continue
       const alt = 90 - (rr / R) * 90
-      const az = ((Math.atan2(-dx, -dy) * 180) / Math.PI + 360) % 360 // north up, east left
-      const total = (1 + sky.ratio) * vanRhijn(alt) + sky.glow0[Math.floor(az) % 360] * Math.exp(-alt / A0)
-      const col = mode === 'atlas' ? atlasColor(total - 1) : contrastColor(2.5 * Math.log10(total / (1 + sky.ratio)))
+      const az = ((Math.atan2(dx, -dy) * 180) / Math.PI + 360) % 360 // north up, east right, like the map
+      const bg = (1 + sky.ratio) * vanRhijn(alt), total = bg + sky.glow(az, alt)
+      const col = mode === 'atlas' ? atlasColor(total - 1) : contrastColor(2.5 * Math.log10(total / bg))
       const k = alt < horizonAlt(loc.horizon, az) ? 0.25 : 1
       const i = (y * S + x) * 4
       img.data[i] = col[0] * k; img.data[i + 1] = col[1] * k; img.data[i + 2] = col[2] * k; img.data[i + 3] = 255
     }
     g.putImageData(img, 0, 0)
   }, [sky, loc.horizon, C, mode])
-  const pt = (az: number, alt: number) => { const r = ((90 - alt) / 90) * R, a = (az * Math.PI) / 180; return [C - r * Math.sin(a), C - r * Math.cos(a)] }
+  const pt = (az: number, alt: number) => { const r = ((90 - alt) / 90) * R, a = (az * Math.PI) / 180; return [C + r * Math.sin(a), C - r * Math.cos(a)] }
   const ring = (alt: number) => ((90 - alt) / 90) * R
   const domeLine = Array.from({ length: 73 }, (_, i) => { const az = i * 5, a0 = sky.domeAlt[Math.floor(az / 10) % 36], a1 = sky.domeAlt[(Math.floor(az / 10) + 1) % 36], f = (az % 10) / 10; return pt(az, a0 * (1 - f) + a1 * f).join(',') }).join(' ')
   return (
@@ -200,7 +201,8 @@ export default function SiteView({ store }: { store: Store }) {
         if (alt < 5) return
         const len = 4 + alt * 0.6 // km
         const p = (az: number, d: number): L.LatLngTuple => [loc.lat + d * kmLat * Math.cos((az * Math.PI) / 180), loc.lon + d * kmLon * Math.sin((az * Math.PI) / 180)]
-        L.polygon([p(0, 0), p(i * 10 - 5, len), p(i * 10, len * 1.02), p(i * 10 + 5, len)], { color: alt > minAlt ? '#fbbf24' : '#94a3b8', weight: 0, fillOpacity: alt > minAlt ? 0.35 : 0.15, interactive: false }).addTo(g)
+        L.polygon([p(0, 0), p(i * 10 - 5, len), p(i * 10, len * 1.02), p(i * 10 + 5, len)], { color: alt > minAlt ? '#fbbf24' : '#94a3b8', weight: 0, fillOpacity: alt > minAlt ? 0.35 : 0.15 })
+          .bindTooltip(`Light dome ${compass(i * 10)} (${i * 10}°): up to ~${alt}° — ${alt > minAlt ? `above your ${minAlt}° minimum` : `below your ${minAlt}° minimum`}`, { sticky: true }).addTo(g)
       })
       for (const d of s.domes) L.circleMarker([d.lat, d.lon], { radius: 5, color: '#fbbf24', weight: 2, fillOpacity: 0 }).bindTooltip(`${names[`${d.lat},${d.lon}`] ?? 'Light source'} · ${Math.round(d.distKm)} km ${compass(d.az)}`).addTo(g)
     }
@@ -253,7 +255,7 @@ export default function SiteView({ store }: { store: Store }) {
       <div className="sgrid">
         <section className="card smap">
           <div ref={el} className="smapel" />
-          <div className="row wrap"><small className="note">Click the map to check any spot.</small><span className="sp" />
+          <div className="row wrap"><small className="note"><span className="sleg grey" /> light dome below your {minAlt}° minimum · <span className="sleg amber" /> dome above it (longer = higher) · <span className="sleg ring" /> town behind a dome · click the map to check any spot</small><span className="sp" />
             <label className="note">Atlas overlay <input type="range" min={0} max={1} step={0.05} value={opacity} onChange={(e) => setOpacity(+e.target.value)} /></label></div>
         </section>
 
@@ -290,9 +292,9 @@ export default function SiteView({ store }: { store: Store }) {
             <div className="ch wrap"><h3>Light domes <small>where to stay higher</small></h3><span className="sp" />
               <span className="ptabs sseg">{(['contrast', 'atlas'] as const).map((m) => <button key={m} className={mode === m ? 'on' : ''} onClick={() => pickMode(m)}>{m === 'contrast' ? 'Local contrast' : 'Atlas scale'}</button>)}</span></div>
             <DomeChart sky={s} loc={loc} minAlt={minAlt} mode={mode} />
-            <div className="slegend"><i style={{ background: mode === 'contrast' ? 'linear-gradient(90deg,#0b1a3a,#1d4ed8 13%,#16a34a 33%,#facc15 60%,#fff7d6)' : 'linear-gradient(90deg,#000,#142f72,#1fa12a,#b8a625,#fd9650,#fb5a49,#a0a0a0,#f2f2f2,#fff3b0)' }} />
-              <small>{mode === 'contrast' ? <><span>as the zenith</span><span>+1 mag</span><span>+3 mag brighter</span></> : <><span>22 (natural)</span><span>20</span><span>18</span><span>16 mag/″²</span></>}</small></div>
-            <p className="note fine">Seen from below: north up, east left. {mode === 'contrast' ? 'Colour: how much brighter than straight up.' : 'Colours follow the atlas scale.'} Dashed blue circle: your {minAlt}° planning minimum; amber line: how high the light domes reach; shaded: your horizon profile.</p>
+            <div className="slegend"><i style={{ background: mode === 'contrast' ? 'linear-gradient(90deg,#0b1a3a,#1d4ed8 7.5%,#16a34a 22.5%,#facc15 50%,#fff7d6)' : 'linear-gradient(90deg,#000,#142f72,#1fa12a,#b8a625,#fd9650,#fb5a49,#a0a0a0,#f2f2f2,#fff3b0)' }} />
+              <small>{mode === 'contrast' ? <><span>no dome</span><span>+0.45 dome edge</span><span>+1</span><span>+2 mag brighter</span></> : <><span>22 (natural)</span><span>20</span><span>18</span><span>16 mag/″²</span></>}</small></div>
+            <p className="note fine">Laid out like the map: north up, east right, horizon on the rim, straight up in the middle. {mode === 'contrast' ? 'Colour: how much the light domes add to the sky at that height.' : 'Colours: total sky brightness on the atlas scale (the sky also brightens towards the horizon on its own).'} Dashed blue circle: your {minAlt}° planning minimum; amber line: how high the light domes reach; shaded: your horizon profile.</p>
           </section>
           <section className="card">
             <h3>Directions</h3>
@@ -313,7 +315,7 @@ export default function SiteView({ store }: { store: Store }) {
               {glowSet && <button onClick={() => store.saveLocation({ ...loc, glow: undefined })}>Stop using domes</button>}
               {glowSet && <small className="note">{sameGlow ? '✓ Tonight, the planner and the altitude charts' : 'Saved limits differ from this reading'} keep targets above the domes.</small>}
             </div>
-            <p className="note fine">A rough model: towns brighter than your site count by their excess brightness and distance (glow ∝ d^−2.5) and are scaled to your site’s own sky glow; domes fade by e every {A0}° of altitude. Terrain, trees, local lights and haze are not included, and on hazy nights domes reach higher. Town names: © OpenStreetMap contributors.</p>
+            <p className="note fine">A rough model: towns brighter than your site count by their excess brightness and distance (glow ∝ d^−2.5) and are scaled to your site’s own sky glow; a nearby town’s dome stands higher than a distant city’s. A dome counts up to where it adds {Math.round(DOME_LEVEL * 100)}% to the sky behind it (≈ +{(2.5 * Math.log10(1 + DOME_LEVEL)).toFixed(2)} mag). Terrain, trees, local lights and haze are not included, and on hazy nights domes reach higher. Town names: © OpenStreetMap contributors.</p>
           </section>
         </div>
       )}

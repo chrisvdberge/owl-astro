@@ -326,3 +326,5 @@ header .acct { margin-left: 0; }
   .app { grid-template-rows: calc(44px + env(safe-area-inset-top)) 1fr calc(58px + env(safe-area-inset-bottom)); }
   .settings .f { grid-template-columns: 1fr; }
 }
+/* Leaflet stacks its panes and controls up to z-index 1000: keep that inside the map so menus and dialogs stay on top */
+.smapel { position: relative; z-index: 0; isolation: isolate; }

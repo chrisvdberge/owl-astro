@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { useAuth } from '../lib/auth'
 import type { SyncStatus } from '../lib/store'
 
@@ -17,7 +18,8 @@ export default function Account({ auth, status }: { auth: ReturnType<typeof useA
       <button className={`acct ${auth.user ? status : ''}`} onClick={() => setOpen(true)}>
         {auth.user ? `● ${LABEL[status]}` : 'Sign in'}
       </button>
-      {open && (
+      {/* rendered at the top of the page, so no header or map layer can cover it */}
+      {open && createPortal(
         <div className="modal" onClick={() => setOpen(false)}>
           <div style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
             <h2>Account<button onClick={() => setOpen(false)}>Close</button></h2>
@@ -40,7 +42,8 @@ export default function Account({ auth, status }: { auth: ReturnType<typeof useA
               </>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   )

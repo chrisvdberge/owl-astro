@@ -36,6 +36,8 @@ import { analyseSite } from './lib/lightpollution'
 
 type View = 'tonight' | 'sky' | 'targets' | 'browse' | 'plan' | 'log' | 'gear' | 'sites' | 'inspector' | 'settings'
 const nameOf = (o: CatObject) => (isCustom(o.id) ? o.names[0] : o.m ?? o.id)
+/** One-line summary for identifying an object on the sky: type, magnitude, size. */
+const objFacts = (o: CatObject) => [o.typeName, o.mag != null && `${o.mag.toFixed(1)} mag`, o.maj != null && `${+o.maj.toFixed(1)}′${o.min != null && o.min !== o.maj ? `×${+o.min.toFixed(1)}′` : ''}`].filter(Boolean).join(' · ')
 const LOOK_KEY = 'astroplanner.look'
 const NEUTRAL = { brightness: 0, contrast: 0, saturation: 0, gamma: 1 }
 type Look = typeof NEUTRAL
@@ -70,6 +72,8 @@ export default function App() {
   const [sess, setSess] = useState<[number, number] | null>(null)
   const [depthMin, setDepthMin] = useState(100) // keep only the area covered by at least this % of the session's frames
   const [menu, setMenu] = useState<{ x: number; y: number; ra: number; dec: number } | null>(null)
+  const [hover, setHover] = useState<{ o: CatObject; x: number; y: number } | null>(null) // object under the cursor
+  const [picked, setPicked] = useState<{ o: CatObject; x: number; y: number } | null>(null) // object clicked on the sky
   const [toast, setToast] = useState('')
   const [coordIn, setCoordIn] = useState('')
   const [ready, setReady] = useState(false)
@@ -91,7 +95,7 @@ export default function App() {
   const section = view === 'browse' ? 'targets' : ['gear', 'sites', 'inspector', 'settings'].includes(view) ? 'setup' : view
   // the bare address opens on Tonight once there is something to plan, otherwise on the sky
   useEffect(() => { if (!p0) navigate(store.wishlist.some((w) => w.status !== 'done') ? '/tonight' : '/sky', { replace: true }) }, [p0]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (view !== 'sky') { setFrameSel(false); setMenu(null) } }, [view])
+  useEffect(() => { if (view !== 'sky') { setFrameSel(false); setMenu(null); setHover(null); setPicked(null) } }, [view])
   const skyPath = target.obj ? `/sky/${encodeURIComponent(slugOf(target.obj))}` : '/sky'
   const NAV: [string, string, string, string][] = [['tonight', '/tonight', 'Tonight', '☾'], ['sky', skyPath, 'Sky', '✦'], ['targets', '/targets', 'Targets', '☆'], ['plan', '/plan', 'Plan', '▦'], ['log', '/log', 'Log', '✎']]
   const goView = (v: 'sites') => navigate(`/setup/${v}`)
@@ -353,6 +357,8 @@ export default function App() {
   // click the frame to select it, then drag it; unselected, the sky pans as usual
   const live = useRef({ frame, fovW: res.fovW, fovH: res.fovH, rotation: pa, mosaic, sel: frameSel })
   useEffect(() => { live.current = { frame, fovW: res.fovW, fovH: res.fovH, rotation: pa, mosaic, sel: frameSel } })
+  const catRef = useRef<CatObject[]>([])
+  useEffect(() => { catRef.current = catalog }, [catalog])
   useEffect(() => {
     const el = viewRef.current
     if (!el) return
@@ -379,6 +385,27 @@ export default function App() {
       } catch { return null }
       return result
     }
+    /** Catalog object at a view position: a marker within a few px of the cursor, else the smallest object whose extent covers it. */
+    const objectUnder = (x: number, y: number): CatObject | undefined => {
+      let w: [number, number] | undefined
+      try { w = aladin.current?.pix2world?.(x, y) } catch { return undefined }
+      if (!w) return undefined
+      const perPx = (aladin.current.getFov?.()[0] ?? 1) / (el.clientWidth || 1)
+      const tol = 10 * perPx
+      let best: CatObject | undefined, bestScore = Infinity
+      for (const o of catRef.current) {
+        const r = (o.maj ?? 0) / 120 // radius in degrees
+        const reach = Math.max(tol, r)
+        if (Math.abs(o.dec - w[1]) > reach) continue
+        const d = separation(w[0], w[1], o.ra, o.dec)
+        if (d > reach) continue
+        // close markers win (Messier slightly favoured), then the tightest extent around the cursor
+        const score = d <= tol ? d / tol - (o.m ? 0.3 : 0) : 1 + r
+        if (score < bestScore) { bestScore = score; best = o }
+      }
+      return best
+    }
+    let hoverFrame = 0
     let down: { x: number; y: number } | null = null
     let grab: { dx: number; dy: number } | null = null
     let moved = false
@@ -388,6 +415,7 @@ export default function App() {
       down = { x, y }; moved = false
       const h = hit(x, y)
       // a selected frame drags from anywhere on it; grabbing the outline of an unselected one selects and drags it in one go
+      setHover(null); setPicked(null)
       if (h && (live.current.sel || h === 'edge')) {
         if (!live.current.sel) { live.current.sel = true; setFrameSel(true) }
         try {
@@ -408,23 +436,46 @@ export default function App() {
           const w = aladin.current.pix2world(x - grab.dx, y - grab.dy)
           if (w) setFrame({ ra: w[0], dec: w[1] })
         } catch { /* cursor left the projected sky */ }
-      } else if (!down) el.classList.toggle('overframe', hit(x, y) === 'edge' || (live.current.sel && hit(x, y) === 'in'))
+      } else if (!down) {
+        const h = hit(x, y)
+        const onFrame = h === 'edge' || (live.current.sel && h === 'in')
+        el.classList.toggle('overframe', onFrame)
+        if (e.pointerType !== 'mouse') return
+        const inside = el.contains(e.target as Node) && !onFrame
+        cancelAnimationFrame(hoverFrame)
+        hoverFrame = requestAnimationFrame(() => {
+          const o = inside ? objectUnder(x, y) : undefined
+          setHover((prev) => (o ? (prev?.o === o && Math.hypot(prev.x - e.clientX, prev.y - e.clientY) < 2 ? prev : { o, x: e.clientX, y: e.clientY }) : null))
+        })
+      }
     }
     const onUp = (e: PointerEvent) => {
       if (e.button !== 0 || !down) return
       const wasDrag = !!grab
-      if (!moved && !wasDrag) { const [x, y] = local(e); setFrameSel(hit(x, y) !== null) }
+      if (!moved && !wasDrag) {
+        const [x, y] = local(e)
+        const h = hit(x, y)
+        const o = h !== 'edge' ? objectUnder(x, y) : undefined
+        if (o) { setPicked({ o, x: e.clientX, y: e.clientY }); setHover(null) }
+        if (!o || !h) setFrameSel(h !== null) // clicking an object inside the frame identifies it rather than selecting the frame
+      }
       grab = null; down = null
       el.classList.remove('dragging')
     }
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setFrameSel(false)
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setFrameSel(false); setPicked(null) } }
+    const onLeave = () => { cancelAnimationFrame(hoverFrame); setHover(null) }
+    const onWheel = () => { setHover(null); setPicked(null) }
     const stoppers = ['mousedown', 'touchstart', 'mousemove', 'touchmove'] as const
     el.addEventListener('pointerdown', onDown, true)
     for (const t of stoppers) el.addEventListener(t, block, true)
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
     window.addEventListener('keydown', onKey)
+    el.addEventListener('pointerleave', onLeave)
+    el.addEventListener('wheel', onWheel, { passive: true })
     return () => {
+      cancelAnimationFrame(hoverFrame)
+      el.removeEventListener('pointerleave', onLeave); el.removeEventListener('wheel', onWheel)
       el.removeEventListener('pointerdown', onDown, true)
       for (const t of stoppers) el.removeEventListener(t, block, true)
       window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); window.removeEventListener('keydown', onKey)
@@ -869,6 +920,20 @@ export default function App() {
           </div>
         )
       })()}
+      {hover && !picked && !menu && (
+        <div className="skytip" style={{ left: Math.min(hover.x + 14, window.innerWidth - 260), top: hover.y + 16 }}>
+          <b>{nameOf(hover.o)}</b>{hover.o.names[0] && <> · {hover.o.names[0]}</>}<small>{objFacts(hover.o)}</small>
+        </div>
+      )}
+      {picked && !menu && (
+        <div className="ctx" style={{ left: Math.min(picked.x, window.innerWidth - 250), top: Math.min(picked.y, window.innerHeight - 170) }}>
+          <b>{nameOf(picked.o)}{picked.o.names[0] && <> · {picked.o.names[0]}</>}</b>
+          <small>{[objFacts(picked.o), picked.o.m && picked.o.id, picked.o.con].filter(Boolean).join(' · ')}</small>
+          <button onClick={() => { setDetail(picked.o); setPicked(null) }}>ⓘ View details</button>
+          {picked.o.id !== target.obj?.id && <button onClick={() => { show(picked.o); setPicked(null) }}>◎ Make this the target</button>}
+          <button onClick={() => { setFrame({ ra: picked.o.ra, dec: picked.o.dec }); setPicked(null) }}>⌖ Centre frame on it</button>
+        </div>
+      )}
       {menu && <div className="ctxbg" onMouseDown={() => setMenu(null)} onContextMenu={(e) => { e.preventDefault(); setMenu(null) }} />}
       {detail && (
         <TargetDetail o={detail} store={store} scope={defaultScope} onClose={() => setDetail(null)}

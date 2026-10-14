@@ -287,3 +287,6 @@ header .sp { flex: 1; } header .burger, header .here { display: none; } header .
 @media (max-width: 900px) { .sgrid { grid-template-columns: 1fr; } .smapel { height: 340px; } .sdirs li { grid-template-columns: 40px 40px 1fr; } .sdirs em { grid-column: 1 / -1; } }
 .sseg { margin: 0; gap: 4px; } .sseg button { padding: 3px 9px; font-size: 12px; } .sseg button.on { border-color: var(--acc); color: var(--acc); }
 .slegend { max-width: 420px; margin: 0 auto; } .slegend i { display: block; height: 6px; border-radius: 3px; } .slegend small { display: flex; justify-content: space-between; color: var(--mute); font-size: 11px; margin-top: 2px; }
+.sdet .f { grid-template-columns: 110px 1fr auto; } .sdet .f.el input { grid-column: auto; }
+.shome { padding: 3px 10px; } .shome.on, .sstar.on { color: var(--warn); border-color: var(--warn); } .sstar { padding: 0 7px; background: none; } .shz summary { cursor: pointer; margin: 8px 0; } .shz .hz { width: 100%; }
+.sadd { margin-top: 16px; } .shits { list-style: none; padding: 0; margin: 6px 0; border: 1px solid var(--line); border-radius: 6px; } .shits li { padding: 6px 9px; cursor: pointer; border-bottom: 1px solid var(--line); } .shits li:last-child { border-bottom: 0; } .shits li:hover { background: #172033; } .shits small { color: var(--mute); }

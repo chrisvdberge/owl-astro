@@ -44,12 +44,15 @@ const DEFAULT: State = {
   plan: [],
 }
 
+/** The app opens on the home site, when one is set; switching sites during a session sticks until the next start. */
+const atHome = (s: State): State => (s.settings.homeId && s.locations.some((l) => l.id === s.settings.homeId) ? { ...s, activeId: s.settings.homeId } : s)
+
 function load(): State {
   try {
     const raw = localStorage.getItem(KEY)
     if (raw) {
       const s = JSON.parse(raw) as State
-      if (s.locations?.length) return { ...DEFAULT, ...s, settings: { ...DEFAULT_SETTINGS, ...s.settings }, wishlist: (s.wishlist ?? []).map(upgradeWish), plan: s.plan ?? [] }
+      if (s.locations?.length) return atHome({ ...DEFAULT, ...s, settings: { ...DEFAULT_SETTINGS, ...s.settings }, wishlist: (s.wishlist ?? []).map(upgradeWish), plan: s.plan ?? [] })
     }
   } catch { /* storage unavailable */ }
   return DEFAULT
@@ -119,7 +122,8 @@ export function useStore(userId: string | null) {
         const remote = await pull(supabase!, ref.current.settings)
         if (dead) return
         if (remote) {
-          if (JSON.stringify(remote) !== JSON.stringify({ ...ref.current })) { ref.current = remote; setState(remote); persist(remote) }
+          const r = initial ? atHome(remote) : { ...remote, activeId: ref.current.activeId && remote.locations.some((l) => l.id === ref.current.activeId) ? ref.current.activeId : remote.activeId }
+          if (JSON.stringify(r) !== JSON.stringify({ ...ref.current })) { ref.current = r; setState(r); persist(r) }
         } else if (initial) {
           ready.current = true
           enqueue(diff(EMPTY, ref.current))
@@ -180,6 +184,10 @@ export function useStore(userId: string | null) {
     removeBlocksFor: (date: string, targetId: string) => update((s) => ({ ...s, plan: s.plan.filter((b) => !(b.date === date && b.targetId === targetId)) })),
     removeWish: (id: string) => update((s) => ({ ...s, wishlist: s.wishlist.filter((w) => w.id !== id) })),
     setActive: (id: string) => update((s) => ({ ...s, activeId: id })),
+    homeId: state.settings.homeId,
+    setHome: (id: string | undefined) => update((s) => ({ ...s, settings: { ...s.settings, homeId: id } })),
+    /** Adds a site without switching to it (saveLocation switches). */
+    addLocation: (loc: Location, activate = true) => update((s) => ({ ...s, locations: [...s.locations, loc], activeId: activate ? loc.id : s.activeId })),
     saveLocation: (loc: Location) =>
       update((s) => ({
         ...s,
@@ -190,7 +198,8 @@ export function useStore(userId: string | null) {
       update((s) => {
         if (s.locations.length <= 1) return s
         const locations = s.locations.filter((l) => l.id !== id)
-        return { ...s, locations, activeId: s.activeId === id ? locations[0].id : s.activeId }
+        const settings = s.settings.homeId === id ? { ...s.settings, homeId: undefined } : s.settings
+        return { ...s, locations, settings, activeId: s.activeId === id ? settings.homeId ?? locations[0].id : s.activeId }
       }),
   }
 }

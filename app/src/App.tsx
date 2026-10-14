@@ -556,7 +556,7 @@ export default function App() {
       <section>
         <h3>Location</h3>
         <label className="f"><span>Site</span>
-          <select value={loc.id} onChange={(e) => store.setActive(e.target.value)}>{store.locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select>
+          <select value={loc.id} onChange={(e) => store.setActive(e.target.value)}>{store.locations.map((l) => <option key={l.id} value={l.id}>{l.id === store.homeId ? '★ ' : ''}{l.name}</option>)}</select>
         </label>
         <label className="f"><span>Name</span><input value={loc.name} onChange={(e) => patchLoc({ name: e.target.value })} /></label>
         <label className="f"><span>Latitude °N</span><input type="number" step="0.0001" value={loc.lat} onChange={(e) => patchLoc({ lat: +e.target.value, tz: tzFromCoords(+e.target.value, loc.lon) ?? loc.tz })} /></label>
@@ -573,6 +573,7 @@ export default function App() {
           <button onClick={here}>📍 Here</button><button onClick={newLoc}>+ New</button>
           <button onClick={() => setHzOpen(true)}>Horizon{loc.horizon.length ? ` (${loc.horizon.length})` : ''}</button>
           {store.locations.length > 1 && <button onClick={() => confirm(`Delete ${loc.name}?`) && store.deleteLocation(loc.id)}>🗑</button>}
+          <button onClick={() => goView('site')} title="Home site, add sites, light pollution">Sites…</button>
         </div>
       </section>
       <section>

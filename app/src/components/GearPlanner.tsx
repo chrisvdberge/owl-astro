@@ -137,7 +137,7 @@ export default function GearPlanner({ store, catalog, scope }: { store: Store; c
         <h3>Your sky</h3>
         <div className="gcgrid">
           <label className="f"><span>Site</span>
-            <select value={loc.id} onChange={(e) => store.setActive(e.target.value)}>{store.locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
+            <select value={loc.id} onChange={(e) => store.setActive(e.target.value)}>{store.locations.map((l) => <option key={l.id} value={l.id}>{l.id === store.homeId ? '★ ' : ''}{l.name}</option>)}</select></label>
           <label className="f"><span>Seeing</span>
             <select value={cond.seeing} onChange={(e) => patchCond({ seeing: +e.target.value })}>
               <option value={0}>Site’s typical ({loc.seeing ?? 3}″)</option>

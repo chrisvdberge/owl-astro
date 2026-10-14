@@ -4,7 +4,7 @@ import { tzOf, zonedEpoch } from './tz'
 import { limitAlt, moonIllum, separation, type Location } from './astro'
 
 /** `scope`: the user's default telescope + camera (account setting); the app falls back to the Seestar S50 Pro preset. */
-export interface Settings { minAlt: number; minHours: number; scope?: { presetId: string; optics: Optics } }
+export interface Settings { minAlt: number; minHours: number; scope?: { presetId: string; optics: Optics }; homeId?: string }
 export const DEFAULT_SETTINGS: Settings = { minAlt: 25, minHours: 2 }
 
 /** Ranking nudge for a wishlist item: unfinished projects first, then the priority the user gave. */

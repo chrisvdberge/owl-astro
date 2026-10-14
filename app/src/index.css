@@ -89,6 +89,9 @@ header .tabs { margin-left: auto; } .acct + .tabs { margin-left: 0; }
 .ctx { position: fixed; z-index: 41; display: grid; gap: 4px; min-width: 240px; padding: 8px; background: var(--panel); border: 1px solid var(--acc); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
 .ctx small { color: var(--mute); padding: 0 2px 4px; } .ctx button { text-align: left; }
 .ctxbg { position: fixed; inset: 0; z-index: 40; }
+.ctx > b { padding: 0 2px; font-size: 14px; }
+.skytip { position: fixed; z-index: 39; pointer-events: none; max-width: 250px; padding: 5px 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,.45); font-size: 13px; }
+.skytip small { display: block; color: var(--mute); }
 .toast { position: fixed; z-index: 60; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--ok); color: var(--ok); border-radius: 8px; padding: 8px 14px; }
 
 .fri { margin-top: 8px; } .fri .row { margin-top: 4px; align-items: center; } .fri .thumb { cursor: pointer; margin-top: 0; }

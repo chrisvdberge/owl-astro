@@ -73,6 +73,9 @@ export const CAMERAS: Camera[] = [
   { id: 'zwo-asi6200', label: 'ZWO ASI6200MC/MM Pro (full frame)', sensorWmm: 36, sensorHmm: 24, pixelUm: 3.76, qe: 0.8, readNoise: 1.5, fullWell: 51000, bits: 16 },
 ]
 
+/** The catalogue scope or lens with this aperture and focal length. */
+export const findScope = (o: Pick<Optics, 'apertureMm' | 'focalLengthMm'>) => SCOPES.find((t) => Math.abs(t.apertureMm - o.apertureMm) < 1e-6 && Math.abs(t.focalLengthMm - o.focalLengthMm) < 1e-6)
+
 /** The catalogue camera behind a sensor's figures. Some cameras share a sensor size and pixel, so QE and read noise break the tie. */
 export function findCamera(o: Pick<Optics, 'sensorWmm' | 'sensorHmm' | 'pixelUm' | 'qe' | 'readNoise'>): Camera | undefined {
   const near = (a: number, b: number) => Math.abs(a - b) < 1e-6
@@ -80,24 +83,28 @@ export function findCamera(o: Pick<Optics, 'sensorWmm' | 'sensorHmm' | 'pixelUm'
   return same.find((c) => c.qe === o.qe && c.readNoise === o.readNoise) ?? same[0]
 }
 
-/** Common imaging scopes and lenses: choosing one fills in aperture and focal length (nominal, no reducer). */
-export interface Scope { id: string; label: string; apertureMm: number; focalLengthMm: number }
+/**
+ * Common imaging scopes and lenses: choosing one fills in aperture and focal length (nominal, no reducer).
+ * `circle` is the approximate well-corrected image circle (mm) with the usual flattener / corrector (`needs`), for judging
+ * whether a sensor is covered without dark or deformed corners.
+ */
+export interface Scope { id: string; label: string; apertureMm: number; focalLengthMm: number; circle?: number; needs?: string }
 export const SCOPES: Scope[] = [
-  { id: 'newton-200', label: 'Newton 200/1000 (f/5)', apertureMm: 200, focalLengthMm: 1000 },
-  { id: 'ts-quad-80', label: 'TS-Optics Quadruplet 80/480 (f/6)', apertureMm: 80, focalLengthMm: 480 },
-  { id: 'wo-redcat51', label: 'William Optics RedCat 51 (250 mm f/4.9)', apertureMm: 51, focalLengthMm: 250 },
-  { id: 'askar-fra400', label: 'Askar FRA400 (400 mm f/5.6)', apertureMm: 72, focalLengthMm: 400 },
-  { id: 'sw-evostar72ed', label: 'Sky-Watcher Evostar 72ED (420 mm f/5.8)', apertureMm: 72, focalLengthMm: 420 },
-  { id: 'sw-evostar80ed', label: 'Sky-Watcher Evostar 80ED (600 mm f/7.5)', apertureMm: 80, focalLengthMm: 600 },
-  { id: 'sw-esprit100ed', label: 'Sky-Watcher Esprit 100ED (550 mm f/5.5)', apertureMm: 100, focalLengthMm: 550 },
-  { id: 'apm-107-700', label: 'APM 107/700 APO (f/6.5)', apertureMm: 107, focalLengthMm: 700 },
-  { id: 'tak-fsq106', label: 'Takahashi FSQ-106EDX4 (530 mm f/5)', apertureMm: 106, focalLengthMm: 530 },
-  { id: 'sw-130pds', label: 'Sky-Watcher 130PDS (650 mm f/5)', apertureMm: 130, focalLengthMm: 650 },
-  { id: 'celestron-rasa8', label: 'Celestron RASA 8 (400 mm f/2)', apertureMm: 203, focalLengthMm: 400 },
-  { id: 'celestron-edge8', label: 'Celestron EdgeHD 8 (2032 mm f/10)', apertureMm: 203, focalLengthMm: 2032 },
-  { id: 'lens-24', label: 'Lens 24 mm f/1.4', apertureMm: 17.1, focalLengthMm: 24 },
-  { id: 'lens-135', label: 'Lens 135 mm f/2', apertureMm: 67.5, focalLengthMm: 135 },
-  { id: 'lens-200', label: 'Lens 200 mm f/2.8', apertureMm: 71.4, focalLengthMm: 200 },
+  { id: 'newton-200', label: 'Newton 200/1000 (f/5)', apertureMm: 200, focalLengthMm: 1000, circle: 44, needs: 'coma corrector' },
+  { id: 'ts-quad-80', label: 'TS-Optics Quadruplet 80/480 (f/6)', apertureMm: 80, focalLengthMm: 480, circle: 44 },
+  { id: 'wo-redcat51', label: 'William Optics RedCat 51 (250 mm f/4.9)', apertureMm: 51, focalLengthMm: 250, circle: 44 },
+  { id: 'askar-fra400', label: 'Askar FRA400 (400 mm f/5.6)', apertureMm: 72, focalLengthMm: 400, circle: 44 },
+  { id: 'sw-evostar72ed', label: 'Sky-Watcher Evostar 72ED (420 mm f/5.8)', apertureMm: 72, focalLengthMm: 420, circle: 28, needs: 'flattener' },
+  { id: 'sw-evostar80ed', label: 'Sky-Watcher Evostar 80ED (600 mm f/7.5)', apertureMm: 80, focalLengthMm: 600, circle: 28, needs: 'flattener' },
+  { id: 'sw-esprit100ed', label: 'Sky-Watcher Esprit 100ED (550 mm f/5.5)', apertureMm: 100, focalLengthMm: 550, circle: 44, needs: 'flattener' },
+  { id: 'apm-107-700', label: 'APM 107/700 APO (f/6.5)', apertureMm: 107, focalLengthMm: 700, circle: 44, needs: 'flattener' },
+  { id: 'tak-fsq106', label: 'Takahashi FSQ-106EDX4 (530 mm f/5)', apertureMm: 106, focalLengthMm: 530, circle: 88 },
+  { id: 'sw-130pds', label: 'Sky-Watcher 130PDS (650 mm f/5)', apertureMm: 130, focalLengthMm: 650, circle: 30, needs: 'coma corrector' },
+  { id: 'celestron-rasa8', label: 'Celestron RASA 8 (400 mm f/2)', apertureMm: 203, focalLengthMm: 400, circle: 22 },
+  { id: 'celestron-edge8', label: 'Celestron EdgeHD 8 (2032 mm f/10)', apertureMm: 203, focalLengthMm: 2032, circle: 42 },
+  { id: 'lens-24', label: 'Lens 24 mm f/1.4', apertureMm: 17.1, focalLengthMm: 24, circle: 43.3, needs: 'stopping down a stop or two' },
+  { id: 'lens-135', label: 'Lens 135 mm f/2', apertureMm: 67.5, focalLengthMm: 135, circle: 43.3 },
+  { id: 'lens-200', label: 'Lens 200 mm f/2.8', apertureMm: 71.4, focalLengthMm: 200, circle: 43.3 },
 ]
 
 const RAD = 180 / Math.PI

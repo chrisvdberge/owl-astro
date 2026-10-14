@@ -30,7 +30,7 @@ import Settings from './components/Settings'
 import { SETUP, SetupMenu, SiteSwitcher, TabBar } from './components/Nav'
 import { Link, navigate, useRoute, withQuery } from './lib/router'
 import ObservationForm, { type ObsPrefill } from './components/ObservationForm'
-import { setupLabel } from './lib/gear'
+import { gearNames, setupLabel } from './lib/gear'
 import { analyseSite } from './lib/lightpollution'
 
 
@@ -831,7 +831,7 @@ export default function App() {
         {target.obj && (
           <>
             <button onClick={() => setDetail(target.obj!)}>ⓘ Details &amp; images</button>
-            <TargetInfo o={target.obj} />
+            <TargetInfo o={target.obj} gear={gearNames(optics, presetId)} />
             {fit && (
               <p className={`badge ${fit.kind}`}>
                 {fit.kind === 'fits' && 'Fits in one frame'}

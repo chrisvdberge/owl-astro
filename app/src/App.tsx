@@ -5,7 +5,7 @@ import { CAMERAS, findCamera, PRESETS, SCOPES, SEEING, compute, framingFit, mosa
 import { scopeName } from './components/FramingPreview'
 import { SURVEYS, defaultSurvey } from './lib/surveys'
 import * as Astronomy from 'astronomy-engine'
-import { altAzToRaDec, horizonAlt, lstHours, parallacticAngle, parallacticFromLst, sampleNight, separation, targetAltAz, type Location } from './lib/astro'
+import { altAzToRaDec, glowAlt, horizonAlt, limitAlt, lstHours, parallacticAngle, parallacticFromLst, sampleNight, separation, targetAltAz, type Location } from './lib/astro'
 import { useStore, type Status } from './lib/store'
 import { clockIn, nightNow, tzFromCoords, tzOf, zonedEpoch } from './lib/tz'
 import { useAuth } from './lib/auth'
@@ -28,6 +28,7 @@ import GearPlanner from './components/GearPlanner'
 import SiteView from './components/SiteView'
 import ObservationForm, { type ObsPrefill } from './components/ObservationForm'
 import { setupLabel } from './lib/gear'
+import { analyseSite } from './lib/lightpollution'
 
 
 type View = 'sky' | 'planner' | 'tonight' | 'catalogue' | 'observations' | 'inspector' | 'gear' | 'site'
@@ -43,6 +44,7 @@ export default function App() {
   const aladin = useRef<any>(null) // eslint-disable-line @typescript-eslint/no-explicit-any
   const overlay = useRef<any>(null) // eslint-disable-line @typescript-eslint/no-explicit-any
   const ground = useRef<any[]>([]) // eslint-disable-line @typescript-eslint/no-explicit-any
+  const domes = useRef<any[]>([]) // eslint-disable-line @typescript-eslint/no-explicit-any
   const figures = useRef<any[]>([]) // eslint-disable-line @typescript-eslint/no-explicit-any
   const [catalog, setCatalog] = useState<CatObject[]>([])
   const [query, setQuery] = useState('')
@@ -87,6 +89,9 @@ export default function App() {
   const [hzOpen, setHzOpen] = useState(false)
   const [showCon, setShowCon] = useState(() => { try { return localStorage.getItem('astroplanner.showConstellations') === '1' } catch { return false } })
   const [showHz, setShowHz] = useState(() => { try { return localStorage.getItem('astroplanner.showHorizon') !== '0' } catch { return true } })
+  const [showDomes, setShowDomes] = useState(() => { try { return localStorage.getItem('astroplanner.showDomes') !== '0' } catch { return true } })
+  // the light domes of the active site, estimated from the atlas (the saved profile, when there is one, is what planning uses)
+  const [domeEst, setDomeEst] = useState<{ id: string; lat: number; lon: number; alt: number[] } | null>(null)
   const [panel, setPanel] = useState<'left' | 'right' | null>(null)
 
   const seeing = loc.seeing ?? 3
@@ -194,6 +199,12 @@ export default function App() {
         A.graphicOverlay({ name: 'min altitude', color: 'rgba(249,115,22,0.7)', lineWidth: 1, lineDash: [6, 5] }),
       ]
       for (const o of ground.current) aladin.current.addOverlay(o)
+      // light domes over the site's towns: a band from the horizon up to where each dome fades, and its upper edge
+      domes.current = [
+        A.graphicOverlay({ name: 'light domes', color: 'rgba(0,0,0,0)', lineWidth: 1 }),
+        A.graphicOverlay({ name: 'light dome edge', color: '#fbbf24', lineWidth: 1.5, lineDash: [4, 4] }),
+      ]
+      for (const o of domes.current) aladin.current.addOverlay(o)
       overlay.current = A.graphicOverlay({ color: '#38bdf8', lineWidth: 2 })
       aladin.current.addOverlay(overlay.current)
       setReady(true)
@@ -273,10 +284,51 @@ export default function App() {
       fill.add(A.polygon([...top, ...side(a0 + SEG), ...side(a0).reverse()], { fill: true, fillColor: 'rgba(120,60,15,0.32)', color: 'rgba(0,0,0,0)' }))
       line.add(A.polyline(top))
       if (minAlt > 0) {
-        min.add(A.polyline(azs.map((az) => sky(Math.max(minAlt, hz(az)), az))))
+        min.add(A.polyline(azs.map((az) => sky(limitAlt(loc, az, minAlt), az))))
       }
     }
   }, [ready, showHz, loc, when, minAlt])
+
+  useEffect(() => {
+    if (!showDomes || (domeEst && domeEst.lat === loc.lat && domeEst.lon === loc.lon)) return
+    let live = true
+    analyseSite(loc.lat, loc.lon).then((r) => { if (live && r) setDomeEst({ id: loc.id, lat: loc.lat, lon: loc.lon, alt: r.domeAlt }) }).catch(() => {})
+    return () => { live = false }
+  }, [showDomes, loc.id, loc.lat, loc.lon]) // eslint-disable-line react-hooks/exhaustive-deps
+  const estDomes = domeEst && domeEst.lat === loc.lat && domeEst.lon === loc.lon ? domeEst.alt : undefined
+  const domeProfile = loc.glow?.length ? loc.glow : estDomes
+  const domesUsed = !!loc.glow?.length
+
+  // the light domes projected onto the sky at the viewed moment, above the local horizon
+  useEffect(() => {
+    if (!ready) return
+    const [band, edge] = domes.current
+    for (const o of domes.current) { o.removeAll(); o.reportChange() }
+    try { localStorage.setItem('astroplanner.showDomes', showDomes ? '1' : '0') } catch { /* ignore */ }
+    if (!showDomes || !domeProfile) return
+    const STEP = 3
+    const sky = (alt: number, az: number) => altAzToRaDec(loc, alt, az, when)
+    const base = (az: number) => horizonAlt(loc.horizon, az)
+    const top = (az: number) => glowAlt(domeProfile, az)
+    const fill = domesUsed ? 'rgba(251,191,36,0.16)' : 'rgba(251,191,36,0.09)'
+    let run: number[] = []
+    const flush = () => {
+      if (run.length > 1) {
+        edge.add(A.polyline(run.map((az) => sky(top(az), az))))
+        // vertical strips keep each polygon small and convex enough for the projection
+        for (let i = 0; i < run.length - 1; i++) {
+          const a = run[i], b = run[i + 1]
+          band.add(A.polygon([sky(base(a), a), sky(top(a), a), sky(top(b), b), sky(base(b), b)], { fill: true, fillColor: fill, color: 'rgba(0,0,0,0)' }))
+        }
+      }
+      run = []
+    }
+    for (let az = 0; az <= 360; az += STEP) {
+      if (top(az) > base(az) + 0.5) run.push(az)
+      else flush()
+    }
+    flush()
+  }, [ready, showDomes, domeProfile, domesUsed, loc, when])
 
   // click the frame to select it, then drag it; unselected, the sky pans as usual
   const live = useRef({ frame, fovW: res.fovW, fovH: res.fovH, rotation: pa, mosaic, sel: frameSel })
@@ -627,6 +679,12 @@ export default function App() {
         <label className="f"><span>Time</span>
           <input type="range" min={0} max={900} step={10} value={tmin} onChange={(e) => setTmin(+e.target.value)} /><em>{clockIn(tzOf(loc), when.getTime())}</em></label>
         <label className="note"><input type="checkbox" checked={showHz} onChange={(e) => setShowHz(e.target.checked)} /> Show the horizon on the sky</label>
+        <label className="note"><input type="checkbox" checked={showDomes} onChange={(e) => setShowDomes(e.target.checked)} /> Show light domes</label>
+        {showDomes && (domeProfile
+          ? domeProfile.every((a) => a === 0) ? <p className="note">No light domes stand out at {loc.name}.</p>
+          : domesUsed ? <p className="note">✓ Light domes count as planning limits here (Tonight, planner, altitude chart).{estDomes && estDomes.some((a, i) => a !== loc.glow![i]) && <> <button className="lnk" onClick={() => patchLoc({ glow: estDomes })}>Update from the atlas</button></>}</p>
+          : <p className="note">Light domes estimated from the atlas; not yet used in planning. <button className="lnk" onClick={() => patchLoc({ glow: domeProfile })}>Use as planning limits</button></p>
+          : <p className="note">Reading the light-pollution atlas…</p>)}
         <div className="row"><button onClick={() => setMoment(nightNow(tzOf(loc)))}>Now</button>
           <small className="note">{target.label} at {Math.round(at.alt)}° alt, {Math.round(at.az)}° az</small></div>
         <AltitudeChart samples={samples} loc={loc} minAlt={minAlt} marker={tmin} onScrub={setTmin} />

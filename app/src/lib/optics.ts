@@ -10,6 +10,9 @@ export interface Optics {
   /** rough sensor characteristics for exposure estimates: average quantum efficiency over the visible band (0..1) and read noise (e-) */
   qe?: number
   readNoise?: number
+  /** full well capacity (e-) and ADC bit depth, for dynamic range, star saturation and file sizes */
+  fullWell?: number
+  bits?: number
 }
 
 export interface Preset { id: string; label: string; optics: Optics }
@@ -19,25 +22,31 @@ export const PRESETS: Preset[] = [
     id: 'seestar-s50-pro',
     label: 'Seestar S50 Pro',
     // 3840x2160 @ 2.9 µm, 260 mm f/5.2
-    optics: { apertureMm: 50, focalLengthMm: 260, sensorWmm: 11.136, sensorHmm: 6.264, pixelUm: 2.9, binning: 1, drizzle: 1, reducer: 1, qe: 0.7, readNoise: 1.2 },
+    optics: { apertureMm: 50, focalLengthMm: 260, sensorWmm: 11.136, sensorHmm: 6.264, pixelUm: 2.9, binning: 1, drizzle: 1, reducer: 1, qe: 0.7, readNoise: 1.2, fullWell: 40000, bits: 12 },
   },
   {
     id: 'seestar-s50',
     label: 'Seestar S50',
     // Sony IMX462 1920x1080 @ 2.9 µm (5.568 x 3.132 mm), 250 mm f/5, 50 mm aperture
-    optics: { apertureMm: 50, focalLengthMm: 250, sensorWmm: 5.568, sensorHmm: 3.132, pixelUm: 2.9, binning: 1, drizzle: 1, reducer: 1, qe: 0.6, readNoise: 1.5 },
+    optics: { apertureMm: 50, focalLengthMm: 250, sensorWmm: 5.568, sensorHmm: 3.132, pixelUm: 2.9, binning: 1, drizzle: 1, reducer: 1, qe: 0.6, readNoise: 1.5, fullWell: 12000, bits: 12 },
   },
   {
     id: 'seestar-s30-pro',
     label: 'Seestar S30 Pro',
     // Sony IMX585 3840x2160 @ 2.9 µm (11.136 x 6.264 mm), 160 mm f/5.3, 30 mm aperture
-    optics: { apertureMm: 30, focalLengthMm: 160, sensorWmm: 11.136, sensorHmm: 6.264, pixelUm: 2.9, binning: 1, drizzle: 1, reducer: 1, qe: 0.7, readNoise: 1.2 },
+    optics: { apertureMm: 30, focalLengthMm: 160, sensorWmm: 11.136, sensorHmm: 6.264, pixelUm: 2.9, binning: 1, drizzle: 1, reducer: 1, qe: 0.7, readNoise: 1.2, fullWell: 40000, bits: 12 },
   },
   {
     id: 'dwarf-mini',
     label: 'Dwarf Mini (telephoto)',
     // Sony IMX662 1920x1080 @ 2.9 µm (5.568 x 3.132 mm), 150 mm f/5, 30 mm aperture
-    optics: { apertureMm: 30, focalLengthMm: 150, sensorWmm: 5.568, sensorHmm: 3.132, pixelUm: 2.9, binning: 1, drizzle: 1, reducer: 1, qe: 0.65, readNoise: 1.0 },
+    optics: { apertureMm: 30, focalLengthMm: 150, sensorWmm: 5.568, sensorHmm: 3.132, pixelUm: 2.9, binning: 1, drizzle: 1, reducer: 1, qe: 0.65, readNoise: 1.0, fullWell: 38000, bits: 12 },
+  },
+  {
+    id: 'dwarf-3',
+    label: 'Dwarf 3 (telephoto)',
+    // Sony IMX678 3840x2160 @ 2 µm (7.68 x 4.32 mm), 150 mm f/4.3, 35 mm aperture
+    optics: { apertureMm: 35, focalLengthMm: 150, sensorWmm: 7.68, sensorHmm: 4.32, pixelUm: 2, binning: 1, drizzle: 1, reducer: 1, qe: 0.7, readNoise: 1.0, fullWell: 11000, bits: 12 },
   },
   {
     id: 'custom',
@@ -47,19 +56,29 @@ export const PRESETS: Preset[] = [
 ]
 
 /** Bare cameras: choosing one fills in the sensor of the current optics (focal length and aperture come from your lens or scope). */
-export interface Camera { id: string; label: string; sensorWmm: number; sensorHmm: number; pixelUm: number; qe: number; readNoise: number }
+export interface Camera { id: string; label: string; sensorWmm: number; sensorHmm: number; pixelUm: number; qe: number; readNoise: number; fullWell: number; bits: number }
 export const CAMERAS: Camera[] = [
-  { id: 'zwo-asi533mc', label: 'ZWO ASI533MC Pro (1″, 3008²)', sensorWmm: 11.31, sensorHmm: 11.31, pixelUm: 3.76, qe: 0.8, readNoise: 1.5 },
-  { id: 'zwo-asi585mc', label: 'ZWO ASI585MC (1/1.2″, 3840×2160)', sensorWmm: 11.14, sensorHmm: 6.26, pixelUm: 2.9, qe: 0.7, readNoise: 1.2 },
-  { id: 'zwo-asi294mc', label: 'ZWO ASI294MC Pro (4/3″)', sensorWmm: 19.1, sensorHmm: 13, pixelUm: 4.63, qe: 0.75, readNoise: 1.6 },
-  { id: 'zwo-asi2600', label: 'ZWO ASI2600MC/MM Pro (APS-C)', sensorWmm: 23.5, sensorHmm: 15.7, pixelUm: 3.76, qe: 0.8, readNoise: 2.0 },
-  { id: 'zwo-asi183', label: 'ZWO ASI183MC/MM Pro (1″)', sensorWmm: 13.2, sensorHmm: 8.8, pixelUm: 2.4, qe: 0.75, readNoise: 2.0 },
-  { id: 'canon-aps-c', label: 'Canon APS-C DSLR (600D/700D/…)', sensorWmm: 22.3, sensorHmm: 14.9, pixelUm: 4.3, qe: 0.4, readNoise: 6 },
-  { id: 'canon-6d', label: 'Canon EOS 6D (full frame)', sensorWmm: 35.8, sensorHmm: 23.9, pixelUm: 6.54, qe: 0.45, readNoise: 4.5 },
-  { id: 'sony-a7iii', label: 'Sony A7 III (full frame)', sensorWmm: 35.6, sensorHmm: 23.8, pixelUm: 5.9, qe: 0.55, readNoise: 3.5 },
-  { id: 'nikon-d7000', label: 'Nikon D7000 (APS-C)', sensorWmm: 23.6, sensorHmm: 15.6, pixelUm: 4.78, qe: 0.45, readNoise: 4 }, // 4928 x 3264
-  { id: 'nikon-d600', label: 'Nikon D600 (full frame)', sensorWmm: 35.9, sensorHmm: 24, pixelUm: 5.95, qe: 0.45, readNoise: 5 }, // 6016 x 4016
+  { id: 'zwo-asi533mc', label: 'ZWO ASI533MC Pro (1″, 3008²)', sensorWmm: 11.31, sensorHmm: 11.31, pixelUm: 3.76, qe: 0.8, readNoise: 1.5, fullWell: 50000, bits: 14 },
+  { id: 'zwo-asi585mc', label: 'ZWO ASI585MC (1/1.2″, 3840×2160)', sensorWmm: 11.14, sensorHmm: 6.26, pixelUm: 2.9, qe: 0.7, readNoise: 1.2, fullWell: 40000, bits: 12 },
+  { id: 'zwo-asi294mc', label: 'ZWO ASI294MC Pro (4/3″)', sensorWmm: 19.1, sensorHmm: 13, pixelUm: 4.63, qe: 0.75, readNoise: 1.6, fullWell: 63700, bits: 14 },
+  { id: 'zwo-asi2600', label: 'ZWO ASI2600MC/MM Pro (APS-C)', sensorWmm: 23.5, sensorHmm: 15.7, pixelUm: 3.76, qe: 0.8, readNoise: 2.0, fullWell: 50000, bits: 16 },
+  { id: 'zwo-asi183', label: 'ZWO ASI183MC/MM Pro (1″)', sensorWmm: 13.2, sensorHmm: 8.8, pixelUm: 2.4, qe: 0.75, readNoise: 2.0, fullWell: 15000, bits: 12 },
+  { id: 'canon-aps-c', label: 'Canon APS-C DSLR (600D/700D/…)', sensorWmm: 22.3, sensorHmm: 14.9, pixelUm: 4.3, qe: 0.4, readNoise: 6, fullWell: 26000, bits: 14 },
+  { id: 'canon-6d', label: 'Canon EOS 6D (full frame)', sensorWmm: 35.8, sensorHmm: 23.9, pixelUm: 6.54, qe: 0.45, readNoise: 4.5, fullWell: 77000, bits: 14 },
+  { id: 'sony-a7iii', label: 'Sony A7 III (full frame)', sensorWmm: 35.6, sensorHmm: 23.8, pixelUm: 5.9, qe: 0.55, readNoise: 3.5, fullWell: 50000, bits: 14 },
+  { id: 'nikon-d7000', label: 'Nikon D7000 (APS-C)', sensorWmm: 23.6, sensorHmm: 15.6, pixelUm: 4.78, qe: 0.45, readNoise: 4, fullWell: 49000, bits: 14 }, // 4928 x 3264
+  { id: 'nikon-d600', label: 'Nikon D600 (full frame)', sensorWmm: 35.9, sensorHmm: 24, pixelUm: 5.95, qe: 0.45, readNoise: 5, fullWell: 76000, bits: 14 }, // 6016 x 4016
+  { id: 'zwo-asi678mc', label: 'ZWO ASI678MC (1/1.8″, 3840×2160)', sensorWmm: 7.68, sensorHmm: 4.32, pixelUm: 2, qe: 0.75, readNoise: 1.0, fullWell: 11000, bits: 12 },
+  { id: 'zwo-asi071mc', label: 'ZWO ASI071MC Pro (APS-C)', sensorWmm: 23.6, sensorHmm: 15.6, pixelUm: 4.78, qe: 0.5, readNoise: 2.3, fullWell: 46000, bits: 14 },
+  { id: 'zwo-asi6200', label: 'ZWO ASI6200MC/MM Pro (full frame)', sensorWmm: 36, sensorHmm: 24, pixelUm: 3.76, qe: 0.8, readNoise: 1.5, fullWell: 51000, bits: 16 },
 ]
+
+/** The catalogue camera behind a sensor's figures. Some cameras share a sensor size and pixel, so QE and read noise break the tie. */
+export function findCamera(o: Pick<Optics, 'sensorWmm' | 'sensorHmm' | 'pixelUm' | 'qe' | 'readNoise'>): Camera | undefined {
+  const near = (a: number, b: number) => Math.abs(a - b) < 1e-6
+  const same = CAMERAS.filter((c) => near(c.sensorWmm, o.sensorWmm) && near(c.sensorHmm, o.sensorHmm) && near(c.pixelUm, o.pixelUm))
+  return same.find((c) => c.qe === o.qe && c.readNoise === o.readNoise) ?? same[0]
+}
 
 /** Common imaging scopes and lenses: choosing one fills in aperture and focal length (nominal, no reducer). */
 export interface Scope { id: string; label: string; apertureMm: number; focalLengthMm: number }
@@ -82,6 +101,12 @@ export const SCOPES: Scope[] = [
 ]
 
 const RAD = 180 / Math.PI
+
+/** Seeing (star FWHM from the atmosphere, arcsec) in the steps a site's typical night is described with. */
+export const SEEING = [
+  { v: 1.5, l: '1.5″ — Excellent (rare)', short: 'Excellent' }, { v: 2, l: '2″ — Good', short: 'Good' }, { v: 3, l: '3″ — Average', short: 'Average' },
+  { v: 4, l: '4″ — Below average', short: 'Below avg' }, { v: 5, l: '5″ — Poor', short: 'Poor' },
+]
 
 export function compute(o: Optics, seeingArcsec: number) {
   const fl = o.focalLengthMm * o.reducer

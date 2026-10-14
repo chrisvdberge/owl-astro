@@ -1,5 +1,5 @@
 import type { CatObject } from './catalog'
-import { CAMERAS, PRESETS, compute, type Optics } from './optics'
+import { findCamera, PRESETS, compute, type Optics } from './optics'
 
 /** Zenith sky brightness (V mag/arcsec²) by Bortle class. */
 export const SKY_MAG = [0, 21.9, 21.6, 21.3, 20.8, 20.1, 19.4, 18.9, 18.4, 17.8]
@@ -19,8 +19,8 @@ export function surfaceBrightness(o: CatObject): { mu: number; source: 'catalogu
   return t ? { mu: t, source: 'typical for the type' } : null
 }
 
-const F0 = 3e10      // photons / s / m² from a magnitude-0 source over a ~300 nm visible band
-const OPTICS = 0.85  // throughput of lenses, coatings and filters other than the one chosen
+export const F0 = 3e10      // photons / s / m² from a magnitude-0 source over a ~300 nm visible band
+export const OPTICS = 0.85  // throughput of lenses, coatings and filters other than the one chosen
 const EFFICIENCY = 0.9 // frames lost to satellites, trails, clouds and rejection
 /**
  * Quality tiers: signal-to-noise per pixel in the stack, the least time worth planning (hours) however bright the target, and how
@@ -106,11 +106,11 @@ export function estimateExposure(o: CatObject, optics: Optics, bortle: number, s
   return { kind: ln ? 'emission' : 'extended', mu: sb!.mu, muSource: sb!.source, skyMag, lines: ln ? rayleighs : undefined, signal, sky, hours, perSub, skySub, bgLimited }
 }
 
-/** Fills in sensor characteristics (quantum efficiency, read noise) from the known unit or camera when the optics do not carry them. */
+/** Fills in sensor characteristics (quantum efficiency, read noise, full well, bit depth) from the known unit or camera when the optics do not carry them. */
 export function withSensor(optics: Optics, presetId?: string): Optics {
-  if (optics.qe && optics.readNoise) return optics
+  if (optics.qe && optics.readNoise && optics.fullWell && optics.bits) return optics
   const unit = PRESETS.find((p) => p.id === presetId && p.id !== 'custom')
-  const near = (a: number, b: number) => Math.abs(a - b) < 1e-6
-  const cam = CAMERAS.find((c) => near(c.sensorWmm, optics.sensorWmm) && near(c.sensorHmm, optics.sensorHmm) && near(c.pixelUm, optics.pixelUm))
-  return { ...optics, qe: optics.qe ?? unit?.optics.qe ?? cam?.qe, readNoise: optics.readNoise ?? unit?.optics.readNoise ?? cam?.readNoise }
+  const cam = findCamera(optics)
+  return { ...optics, qe: optics.qe ?? unit?.optics.qe ?? cam?.qe, readNoise: optics.readNoise ?? unit?.optics.readNoise ?? cam?.readNoise,
+    fullWell: optics.fullWell ?? unit?.optics.fullWell ?? cam?.fullWell, bits: optics.bits ?? unit?.optics.bits ?? cam?.bits }
 }

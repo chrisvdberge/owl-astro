@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import A from 'aladin-lite'
-import { CATALOGS, catalogTag, customObject, isCustom, loadCatalog, searchCatalog, sexa, type CatObject, type CustomTarget } from './lib/catalog'
+import { CATALOGS, catalogTag, customObject, findBySlug, isCustom, loadCatalog, searchCatalog, sexa, slugOf, type CatObject, type CustomTarget } from './lib/catalog'
 import { CAMERAS, findCamera, PRESETS, SCOPES, SEEING, compute, framingFit, mosaicPanels, rectCorners, sessionCrop, type Optics } from './lib/optics'
 import { scopeName } from './components/FramingPreview'
 import { SURVEYS, defaultSurvey } from './lib/surveys'
@@ -26,12 +26,15 @@ import Observations from './components/Observations'
 import Inspector from './components/Inspector'
 import GearPlanner from './components/GearPlanner'
 import SiteView from './components/SiteView'
+import Settings from './components/Settings'
+import { SETUP, SetupMenu, SiteSwitcher, TabBar } from './components/Nav'
+import { Link, navigate, useRoute, withQuery } from './lib/router'
 import ObservationForm, { type ObsPrefill } from './components/ObservationForm'
 import { setupLabel } from './lib/gear'
 import { analyseSite } from './lib/lightpollution'
 
 
-type View = 'sky' | 'planner' | 'tonight' | 'catalogue' | 'observations' | 'inspector' | 'gear' | 'site'
+type View = 'tonight' | 'sky' | 'targets' | 'browse' | 'plan' | 'log' | 'gear' | 'sites' | 'inspector' | 'settings'
 const nameOf = (o: CatObject) => (isCustom(o.id) ? o.names[0] : o.m ?? o.id)
 const LOOK_KEY = 'astroplanner.look'
 const NEUTRAL = { brightness: 0, contrast: 0, saturation: 0, gamma: 1 }
@@ -63,7 +66,6 @@ export default function App() {
   const [frame, setFrame] = useState<{ ra: number; dec: number }>({ ra: 83.82, dec: -5.39 })
   const [frameSel, setFrameSel] = useState(false)
   const [plan, setPlan] = useState(false)
-  const [detail, setDetail] = useState<CatObject | null>(null)
   const [obs, setObs] = useState<ObsPrefill | null>(null)
   const [sess, setSess] = useState<[number, number] | null>(null)
   const [depthMin, setDepthMin] = useState(100) // keep only the area covered by at least this % of the session's frames
@@ -81,11 +83,29 @@ export default function App() {
   const setTmin = (t: number) => setMoment((m) => ({ ...m, tmin: t }))
   const [mount, setMount] = useState<'altaz' | 'eq'>(() => { try { return localStorage.getItem('astroplanner.mount') === 'eq' ? 'eq' : 'altaz' } catch { return 'altaz' } })
   const minAlt = store.settings.minAlt
-  // opens on Tonight once there is something on the wishlist to plan
-  const [view, setView] = useState<View>(() => (store.wishlist.some((w) => w.status !== 'done') ? 'tonight' : 'sky'))
-  const [menuOpen, setMenuOpen] = useState(false)
-  const navItems: [View, string][] = [['tonight', 'Tonight'], ['sky', 'Sky'], ['catalogue', 'Catalogue'], ['site', 'Site'], ['observations', 'Log'], ['inspector', 'Inspector'], ['gear', 'Gear'], ['planner', `Planner${store.wishlist.length ? ` (${store.wishlist.length})` : ''}`]]
-  const goView = (v: View) => { setView(v); if (v !== 'sky') { setFrameSel(false); setMenu(null) } }
+  // the page comes from the URL: /tonight[/date], /sky[/target], /targets[/browse], /plan, /log, /setup/{gear,sites,inspector,settings}
+  const route = useRoute()
+  const [p0, p1] = route.path
+  const view: View = p0 === 'sky' ? 'sky' : p0 === 'targets' ? (p1 === 'browse' ? 'browse' : 'targets') : p0 === 'plan' ? 'plan' : p0 === 'log' ? 'log'
+    : p0 === 'setup' ? (p1 === 'gear' ? 'gear' : p1 === 'inspector' ? 'inspector' : p1 === 'settings' ? 'settings' : 'sites') : 'tonight'
+  const section = view === 'browse' ? 'targets' : ['gear', 'sites', 'inspector', 'settings'].includes(view) ? 'setup' : view
+  // the bare address opens on Tonight once there is something to plan, otherwise on the sky
+  useEffect(() => { if (!p0) navigate(store.wishlist.some((w) => w.status !== 'done') ? '/tonight' : '/sky', { replace: true }) }, [p0]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (view !== 'sky') { setFrameSel(false); setMenu(null) } }, [view])
+  const skyPath = target.obj ? `/sky/${encodeURIComponent(slugOf(target.obj))}` : '/sky'
+  const NAV: [string, string, string, string][] = [['tonight', '/tonight', 'Tonight', '☾'], ['sky', skyPath, 'Sky', '✦'], ['targets', '/targets', 'Targets', '☆'], ['plan', '/plan', 'Plan', '▦'], ['log', '/log', 'Log', '✎']]
+  const goView = (v: 'sites') => navigate(`/setup/${v}`)
+  // custom fields are targets too (found by their id in URLs)
+  const routed = useRef('') // the /sky/<target>?framing route last put on the sky
+  const customs = useMemo(() => store.wishlist.flatMap((w) => (w.custom ? [customObject(w.id, w.custom)] : [])), [store.wishlist])
+  // target details open over any page as ?target=m31: back closes them and the link can be shared
+  const detailSlug = route.query.get('target')
+  const detail = useMemo(() => (detailSlug && catalog.length ? findBySlug(catalog, detailSlug, customs) ?? null : null), [detailSlug, catalog, customs])
+  const setDetail = (o: CatObject | null) => {
+    if (o) navigate(withQuery({ target: slugOf(o) }), { state: { overlay: true } })
+    else if ((history.state as { overlay?: boolean } | null)?.overlay) history.back()
+    else navigate(withQuery({ target: null }), { replace: true })
+  }
   const [hzOpen, setHzOpen] = useState(false)
   const [showCon, setShowCon] = useState(() => { try { return localStorage.getItem('astroplanner.showConstellations') === '1' } catch { return false } })
   const [showHz, setShowHz] = useState(() => { try { return localStorage.getItem('astroplanner.showHorizon') !== '0' } catch { return true } })
@@ -455,15 +475,27 @@ export default function App() {
     }
   }
 
-  function show(o: CatObject, fid?: string) { setView('sky'); pick(o, fid) }
+  /** Opens a target on the sky view (by URL, so it can be linked and the back button returns). */
+  function show(o: CatObject, fid?: string) { routed.current = ''; navigate(`/sky/${encodeURIComponent(slugOf(o))}${fid ? `?framing=${encodeURIComponent(fid)}` : ''}`) }
 
   function pick(o: CatObject, fid?: string) {
     setQuery(''); goTo({ ra: o.ra, dec: o.dec, label: nameOf(o), obj: o }, true, fid)
-  }
+  }  // /sky/<target>[?framing=id] puts that target (and framing) on the sky
+  useEffect(() => {
+    if (view !== 'sky' || !p1 || !catalog.length || !ready) return
+    const fid = route.query.get('framing') ?? undefined
+    const key = `${p1}|${fid ?? ''}`
+    if (routed.current === key) return
+    const o = findBySlug(catalog, p1, customs)
+    if (!o) return
+    routed.current = key
+    pick(o, fid)
+  }, [view, p1, route.query, catalog, customs, ready]) // eslint-disable-line react-hooks/exhaustive-deps
+
 
   function goCoords() {
     const m = coordIn.trim().match(/^(-?\d+(?:\.\d+)?)[\s,]+(-?\d+(?:\.\d+)?)$/)
-    if (m) goTo({ ra: +m[1], dec: +m[2], label: `${m[1]} ${m[2]}` })
+    if (m) { goTo({ ra: +m[1], dec: +m[2], label: `${m[1]} ${m[2]}` }); routed.current = ''; navigate('/sky', { replace: true }) }
   }
 
   /** Catalog object a frame at (ra, dec) is about: the current target if it is in frame, else the most prominent nearby. */
@@ -552,7 +584,7 @@ export default function App() {
             onChange={(e) => setQuery(e.target.value)} onFocus={() => setSearchFocus(true)} onBlur={() => setSearchFocus(false)} />
           {hits.length > 0 && (query.length >= 2 || searchFocus) && (
             <ul>{hits.map((o) => (
-              <li key={o.id} onMouseDown={(e) => { e.preventDefault(); pick(o) }}>
+              <li key={o.id} onMouseDown={(e) => { e.preventDefault(); setQuery(''); show(o) }}>
                 <b>{o.m ? `${o.m} · ${o.id}` : o.id}</b> <small>{o.names[0] ?? o.typeName}</small>
                 <i className="ctag">{catalogTag(o)}</i>
               </li>
@@ -560,7 +592,7 @@ export default function App() {
           )}
         </div>
         <div className="chips">{['M31', 'M42', 'M45', 'M51', 'M81', 'M101', 'NGC 7000', 'NGC 6888'].map((q) => (
-          <button key={q} onClick={() => { const o = searchCatalog(catalog, q, 1)[0]; if (o) pick(o) }}>{q}</button>
+          <button key={q} onClick={() => { const o = searchCatalog(catalog, q, 1)[0]; if (o) show(o) }}>{q}</button>
         ))}</div>
         <div className="row">
           <input placeholder="RA Dec in degrees" value={coordIn} onChange={(e) => setCoordIn(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && goCoords()} />
@@ -625,7 +657,7 @@ export default function App() {
           <button onClick={here}>📍 Here</button><button onClick={newLoc}>+ New</button>
           <button onClick={() => setHzOpen(true)}>Horizon{loc.horizon.length ? ` (${loc.horizon.length})` : ''}</button>
           {store.locations.length > 1 && <button onClick={() => confirm(`Delete ${loc.name}?`) && store.deleteLocation(loc.id)}>🗑</button>}
-          <button onClick={() => goView('site')} title="Home site, add sites, light pollution">Sites…</button>
+          <button onClick={() => goView('sites')} title="Home site, add sites, light pollution">Sites…</button>
         </div>
       </section>
       <section>
@@ -771,47 +803,45 @@ export default function App() {
   return (
     <div className={`app ${view !== 'sky' ? 'pv' : ''}`}>
       <header>
-        <b className="brand"><img src="/favicon.svg" alt="" width={26} height={26} />Owl Astro</b>
-        <span className="nav">
-          {navItems.map(([v, name]) => <button key={v} className={view === v ? 'on' : ''} onClick={() => goView(v)}>{name}</button>)}
-        </span>
-        <span className="tgt">{target.label} · {sexa(target.ra, target.dec)} · {res.fovW.toFixed(2)}°×{res.fovH.toFixed(2)}°</span>
+        <Link to="/tonight" className="brand"><img src="/favicon.svg" alt="" width={26} height={26} />Owl Astro</Link>
+        <nav className="nav">{NAV.map(([id, to, name]) => <Link key={id} to={to} className={section === id ? 'on' : ''}>{name}{id === 'targets' && store.wishlist.length ? <small>{store.wishlist.length}</small> : null}</Link>)}</nav>
+        <span className="here">{view === 'browse' ? 'Targets' : view === 'sites' ? 'Sites' : view === 'gear' ? 'Gear' : view === 'inspector' ? 'Inspector' : view === 'settings' ? 'Settings' : NAV.find(([id]) => id === view)?.[2]}</span>
         <span className="sp" />
         {!online && <span className="offline" title="No connection: planning works, forecasts, survey images and sync resume when you are back online">Offline</span>}
+        <SiteSwitcher store={store} />
+        <SetupMenu active={section === 'setup'} />
         <span className="acctslot"><Account auth={auth} status={store.syncStatus} /></span>
-        <span className="here">{navItems.find(([v]) => v === view)?.[1].replace(/ \(\d+\)/, '')}</span>
-        <button className="burger" aria-label="Menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? '✕' : '☰'}</button>
       </header>
-      {menuOpen && (
-        <>
-          <div className="mback" onClick={() => setMenuOpen(false)} />
-          <nav className="mmenu">
-            {navItems.map(([v, name]) => <button key={v} className={view === v ? 'on' : ''} onClick={() => { goView(v); setMenuOpen(false) }}>{name}</button>)}
-            {view === 'sky' && (
-              <>
-                <hr />
-                <button onClick={() => { setPanel('left'); setMenuOpen(false) }}>Setup — optics, location, survey</button>
-                <button onClick={() => { setPanel('right'); setMenuOpen(false) }}>Results — field of view, altitude, target</button>
-              </>
-            )}
-            <hr />
-            <div className="macct"><Account auth={auth} status={store.syncStatus} /></div>
-          </nav>
-        </>
-      )}
+      <TabBar items={NAV.slice(0, 4)} current={['tonight', 'sky', 'targets', 'plan'].includes(section) ? section : 'more'} more={<>
+        <Link to="/log" className={view === 'log' ? 'on' : ''}><b>Log</b><small>Your observations</small></Link>
+        {SETUP.map(([to, name, sub]) => <Link key={to} to={to} className={route.path.join('/') === to.slice(1) ? 'on' : ''}><b>{name}</b><small>{sub}</small></Link>)}
+        <div className="macct" onClick={(e) => e.stopPropagation()}><Account auth={auth} status={store.syncStatus} /></div>
+      </>} />
+      {view === 'sky' && <div className="skytgt">{target.label} · {sexa(target.ra, target.dec)} · {res.fovW.toFixed(2)}°×{res.fovH.toFixed(2)}°</div>}
       {view === 'sky' && (
         <div className="fchips">
           <button onClick={() => setPanel(panel === 'left' ? null : 'left')}>Setup</button>
           <button onClick={() => setPanel(panel === 'right' ? null : 'right')}>Results</button>
         </div>
       )}
-      {view === 'tonight' && <main className="pmain"><Tonight store={store} catalog={catalog} scope={defaultScope} onShow={show} onDetails={setDetail} onSky={() => goView('sky')} onLog={setObs} /></main>}
-      {view === 'catalogue' && <main className="pmain"><Catalogue store={store} catalog={catalog} scope={defaultScope} onDetails={setDetail} onShow={show} /></main>}
-      {view === 'observations' && <main className="pmain"><Observations store={store} catalog={catalog} onDetails={setDetail} onAdd={() => setObs({})} onEdit={setObs} /></main>}
+      {view === 'tonight' && <main className="pmain"><Tonight store={store} catalog={catalog} scope={defaultScope} onShow={show} onDetails={setDetail} onSky={() => navigate(skyPath)} onLog={setObs}
+        night={p1} onNight={(n) => navigate(n ? `/tonight/${n}` : '/tonight', { replace: true })} /></main>}
+      {(view === 'targets' || view === 'browse') && (
+        <main className="pmain">
+          <div className="subnav"><h2 className="th">Targets</h2>
+            <Link to="/targets" className={view === 'targets' ? 'on' : ''}>Your targets{store.wishlist.length ? ` (${store.wishlist.length})` : ''}</Link>
+            <Link to="/targets/browse" className={view === 'browse' ? 'on' : ''}>Browse catalogue</Link></div>
+          {view === 'targets'
+            ? <Planner mode="wishlist" store={store} catalog={catalog} onShow={show} onDetails={setDetail} onLog={setObs} />
+            : <Catalogue store={store} catalog={catalog} scope={defaultScope} onDetails={setDetail} onShow={show} />}
+        </main>
+      )}
+      {view === 'plan' && <main className="pmain"><div className="subnav"><h2 className="th">Plan <small>the year ahead for your targets</small></h2></div><Planner mode="calendar" store={store} catalog={catalog} onShow={show} onDetails={setDetail} onLog={setObs} /></main>}
+      {view === 'log' && <main className="pmain"><Observations store={store} catalog={catalog} onDetails={setDetail} onAdd={() => setObs({})} onEdit={setObs} /></main>}
       {view === 'inspector' && <main className="pmain"><Inspector store={store} catalog={catalog} scope={defaultScope} /></main>}
-      {view === 'site' && <main className="pmain"><SiteView store={store} /></main>}
+      {view === 'sites' && <main className="pmain"><SiteView store={store} /></main>}
       {view === 'gear' && <main className="pmain"><GearPlanner store={store} catalog={catalog} scope={defaultScope} /></main>}
-      {view === 'planner' && <main className="pmain"><Planner store={store} catalog={catalog} onShow={show} onDetails={setDetail} onLog={setObs} /></main>}
+      {view === 'settings' && <main className="pmain"><Settings store={store} scope={defaultScope} auth={auth} /></main>}
       <aside className={`l ${panel === 'left' ? 'open' : ''}`}>{left}</aside>
       <div className="view" ref={viewRef} />
       {menu && (() => {
@@ -842,8 +872,8 @@ export default function App() {
       {menu && <div className="ctxbg" onMouseDown={() => setMenu(null)} onContextMenu={(e) => { e.preventDefault(); setMenu(null) }} />}
       {detail && (
         <TargetDetail o={detail} store={store} scope={defaultScope} onClose={() => setDetail(null)}
-          onShow={(fid) => { show(detail, fid); setDetail(null) }}
-          onPlanner={() => { setView('planner'); setDetail(null) }} onLog={() => { setObs({ targetId: detail.id }); setDetail(null) }} />
+          onShow={(fid) => show(detail, fid)}
+          onPlanner={() => navigate('/targets')} onLog={() => { setObs({ targetId: detail.id }); setDetail(null) }} />
       )}
       {obs && (
         <ObservationForm store={store} catalog={catalog} setup={setupLabel(optics, presetId)} prefill={obs} onClose={() => setObs(null)} />

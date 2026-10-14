@@ -117,7 +117,7 @@ export default function TargetDetail({ o, store, scope, onClose, onShow, onPlann
         {wish && <textarea className="notes" rows={2} placeholder="Notes" value={wish.notes} onChange={(e) => store.patchWish(o.id, { notes: e.target.value })} />}
 
         <footer className="df">
-          {wish ? <button className="pri" onClick={onPlanner}>📅 Open in Planner</button> : <button className="pri" onClick={() => store.addWish(o.id, { status: 'progress' })}>＋ Add to planner</button>}
+          {wish ? <button className="pri" onClick={onPlanner}>☆ Open in your targets</button> : <button className="pri" onClick={() => store.addWish(o.id, { status: 'progress' })}>＋ Add to planner</button>}
           {!wish && <button onClick={() => store.addWish(o.id)}>☆ Add to wishlist</button>}
           <button onClick={() => onShow(wish?.framings?.[0]?.id)}>▭ Framing &amp; Mosaic</button>
           <button onClick={onLog}>＋ Log observation</button>

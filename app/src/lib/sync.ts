@@ -21,7 +21,7 @@ const wishRow = (w: WishItem) => ({ id: w.id, status: w.status, goal_hours: w.go
 const framRow = (w: string, f: Framing) => { const { id, name, created, thumb, ...data } = f; return { id, wish_id: w, name, created, thumb: thumb ?? null, data } }
 const planRow = (b: PlanBlock) => ({ id: b.id, date: b.date, target_id: b.targetId, start_min: b.start, end_min: b.end })
 const sesRow = (w: string, s: Session) => ({ id: s.id, wish_id: w, date: s.date, hours: s.hours, note: s.note, ...(s.setup ? { setup: s.setup } : {}), ...(s.frames ? { frames: s.frames } : {}), ...(s.exposure ? { exposure: s.exposure } : {}) })
-const setRow = (d: Data) => ({ min_alt: d.settings.minAlt, min_hours: d.settings.minHours, active_id: d.activeId, ...(d.settings.scope ? { scope: d.settings.scope } : {}) })
+const setRow = (d: Data) => ({ min_alt: d.settings.minAlt, min_hours: d.settings.minHours, active_id: d.activeId, ...(d.settings.scope ? { scope: d.settings.scope } : {}), ...('homeId' in d.settings ? { home_id: d.settings.homeId ?? null } : {}) })
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
@@ -78,7 +78,7 @@ export async function pull(db: SupabaseClient, fallback: Settings): Promise<Data
       framing: r.framing ?? undefined, thumb: r.thumb ?? undefined,
       sessions: sessions.get(r.id) ?? [], framings: framings.get(r.id),
     })),
-    settings: { minAlt: st.data?.min_alt ?? fallback.minAlt, minHours: st.data?.min_hours ?? fallback.minHours, scope: st.data?.scope ?? undefined },
+    settings: { minAlt: st.data?.min_alt ?? fallback.minAlt, minHours: st.data?.min_hours ?? fallback.minHours, scope: st.data?.scope ?? undefined, ...(st.data?.home_id ? { homeId: st.data.home_id } : {}) },
     plan,
   }
 }

@@ -3,7 +3,11 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { horizonAlt, type Location } from '../lib/astro'
 import { A0, LP_CREDIT, LP_TILES, analyseSite, bortleOf, compass, lpRatio, milkyWayOf, nelmOf, placeName, sqmOf, starsOf, vanRhijn, zoneOf, type SiteSky } from '../lib/lightpollution'
-import { tzFromCoords } from '../lib/tz'
+import { tzFromCoords, tzOf } from '../lib/tz'
+import { elevationAt, searchPlaces, type Place } from '../lib/places'
+import { DEFAULT_BORTLE } from '../lib/exposure'
+import { SEEING } from '../lib/optics'
+import HorizonEditor from './HorizonEditor'
 import type { useStore } from '../lib/store'
 
 type Store = ReturnType<typeof useStore>
@@ -82,6 +86,46 @@ function DomeChart({ sky, loc, minAlt, mode }: { sky: SiteSky; loc: Location; mi
       </svg>
     </div>
   )
+}
+
+const validTz = (tz: string) => { try { new Intl.DateTimeFormat('en', { timeZone: tz }); return true } catch { return false } }
+
+/** Everything stored about the active site, editable in place. */
+function SiteDetails({ loc, store }: { loc: Location; store: Store }) {
+  const patch = (p: Partial<Location>) => store.saveLocation({ ...loc, ...p })
+  const isHome = store.homeId === loc.id
+  const [busy, setBusy] = useState(false)
+  const coords = (lat: number, lon: number) => patch({ lat, lon, tz: tzFromCoords(lat, lon) ?? loc.tz })
+  return (
+    <section className="card sdet">
+      <div className="ch wrap"><h3>Site details</h3><span className="sp" />
+        <button className={isHome ? 'shome on' : 'shome'} onClick={() => store.setHome(isHome ? undefined : loc.id)} title="The app opens on your home site">{isHome ? '★ Home site' : '☆ Make home'}</button></div>
+      <label className="f"><span>Name</span><input value={loc.name} onChange={(e) => patch({ name: e.target.value })} /></label>
+      <label className="f"><span>Latitude °N</span><input type="number" step="0.0001" value={loc.lat} onChange={(e) => coords(+e.target.value, loc.lon)} /></label>
+      <label className="f"><span>Longitude °E</span><input type="number" step="0.0001" value={loc.lon} onChange={(e) => coords(loc.lat, +e.target.value)} /></label>
+      <label className="f el"><span>Elevation m</span><input type="number" value={loc.elevation} onChange={(e) => patch({ elevation: +e.target.value })} />
+        <button className="gx" disabled={busy} title="Look up the ground height here" onClick={async () => { setBusy(true); const e = await elevationAt(loc.lat, loc.lon); setBusy(false); if (e != null) patch({ elevation: e }) }}>↻</button></label>
+      <label className="f"><span>Time zone</span><input value={loc.tz ?? tzOf(loc)} onChange={(e) => patch({ tz: e.target.value })} /></label>
+      {loc.tz && !validTz(loc.tz) && <div className="row wrap"><small className="gt warn">“{loc.tz}” is not a time zone (e.g. Europe/Amsterdam).</small>
+        {tzFromCoords(loc.lat, loc.lon) && <button onClick={() => patch({ tz: tzFromCoords(loc.lat, loc.lon) })}>Use {tzFromCoords(loc.lat, loc.lon)}</button>}</div>}
+      <label className="f"><span>Typical seeing</span>
+        <select value={loc.seeing ?? 3} onChange={(e) => patch({ seeing: +e.target.value })}>{SEEING.map((x) => <option key={x.v} value={x.v}>{x.l}</option>)}</select></label>
+      <label className="f"><span>Sky (Bortle)</span>
+        <select value={loc.bortle ?? ''} onChange={(e) => patch({ bortle: e.target.value ? +e.target.value : undefined })}>
+          <option value="">Not set (assume {DEFAULT_BORTLE})</option>{[1, 2, 3, 4, 5, 6, 7, 8, 9].map((b) => <option key={b} value={b}>Bortle {b}</option>)}</select></label>
+      <details className="shz"><summary className="note">Horizon profile ({loc.horizon.length ? `${loc.horizon.length} points` : 'flat'}) — trees, buildings, hills</summary>
+        <HorizonEditor points={loc.horizon} onChange={(horizon) => patch({ horizon })} /></details>
+      <div className="row wrap">
+        <button disabled={store.locations.length < 2} onClick={() => confirm(`Delete ${loc.name}? Its horizon and settings go with it.`) && store.deleteLocation(loc.id)}>🗑 Delete site</button>
+      </div>
+    </section>
+  )
+}
+
+/** Adds a site: ground height from Open-Meteo and sky darkness from the atlas are filled in. */
+async function makeSite(name: string, lat: number, lon: number): Promise<Location> {
+  const [ratio, elevation] = await Promise.all([lpRatio(lat, lon).catch(() => null), elevationAt(lat, lon)])
+  return { id: crypto.randomUUID(), name, lat: +lat.toFixed(4), lon: +lon.toFixed(4), elevation: elevation ?? 0, horizon: [], seeing: 3, tz: tzFromCoords(lat, lon), bortle: ratio != null ? Math.round(bortleOf(sqmOf(ratio))) : undefined }
 }
 
 export default function SiteView({ store }: { store: Store }) {
@@ -177,19 +221,34 @@ export default function SiteView({ store }: { store: Store }) {
     if (!probe) return
     store.saveLocation({ ...loc, lat: +probe.lat.toFixed(4), lon: +probe.lon.toFixed(4), tz: tzFromCoords(probe.lat, probe.lon) ?? loc.tz, horizon: [], glow: undefined, bortle: probe.ratio != null ? Math.round(bortleOf(sqmOf(probe.ratio))) : loc.bortle })
   }
-  async function newSite() {
-    if (!probe) return
-    const name = prompt('Name for the new site', (await placeName(probe.lat, probe.lon)) ?? 'New site')
+  async function addAt(lat: number, lon: number, suggested?: string) {
+    const name = prompt('Name for the new site', suggested ?? (await placeName(lat, lon)) ?? 'New site')
     if (!name) return
-    const id = crypto.randomUUID()
-    store.saveLocation({ id, name, lat: +probe.lat.toFixed(4), lon: +probe.lon.toFixed(4), elevation: 0, horizon: [], seeing: loc.seeing ?? 3, tz: tzFromCoords(probe.lat, probe.lon), bortle: probe.ratio != null ? Math.round(bortleOf(sqmOf(probe.ratio))) : undefined })
-    store.setActive(id)
+    store.addLocation(await makeSite(name, lat, lon))
+    setProbe(null); setHits(null); setQ('')
   }
+  const newSite = () => probe && addAt(probe.lat, probe.lon)
+  // add a site by place name or by where you are
+  const [q, setQ] = useState('')
+  const [hits, setHits] = useState<Place[] | null>(null)
+  const [msg, setMsg] = useState('')
+  async function search() {
+    if (!q.trim()) return
+    setMsg('Searching…'); setHits(null)
+    try { const h = await searchPlaces(q.trim()); setHits(h); setMsg(h.length ? '' : 'Nothing found.') } catch (e) { setMsg(e instanceof Error ? e.message : 'Search failed') }
+  }
+  function mine() {
+    if (!navigator.geolocation) return setMsg('This device cannot report its location.')
+    setMsg('Finding you…')
+    navigator.geolocation.getCurrentPosition((p) => { setMsg(''); void addAt(p.coords.latitude, p.coords.longitude) }, (e) => setMsg(e.message), { enableHighAccuracy: true, timeout: 15000 })
+  }
+  const home = store.locations.find((l) => l.id === store.homeId)
+  const kmFrom = (a: Location, b: Location) => Math.hypot((a.lat - b.lat) * 111.2, (a.lon - b.lon) * 111.2 * Math.cos((a.lat * Math.PI) / 180))
 
   return (
     <div className="site">
       <div className="ch wrap"><h2 className="th">Site <small>light pollution · light domes</small></h2><span className="sp" />
-        <select value={loc.id} onChange={(e) => store.setActive(e.target.value)}>{store.locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div>
+        <select value={loc.id} onChange={(e) => store.setActive(e.target.value)}>{store.locations.map((l) => <option key={l.id} value={l.id}>{l.id === store.homeId ? '★ ' : ''}{l.name}</option>)}</select></div>
 
       <div className="sgrid">
         <section className="card smap">
@@ -259,20 +318,35 @@ export default function SiteView({ store }: { store: Store }) {
         </div>
       )}
 
-      <section className="card">
-        <h3>Your sites compared</h3>
-        <table className="ssites"><thead><tr><th>Site</th><th>SQM</th><th>Bortle ≈</th><th>Set</th><th /></tr></thead><tbody>
-          {sorted.map((l) => {
-            const r = others[l.id]
-            return (
-              <tr key={l.id} className={l.id === loc.id ? 'on' : ''} onClick={() => store.setActive(l.id)}>
-                <td>{l.name}</td><td>{r == null ? '–' : sqmOf(r).toFixed(2)}</td><td>{r == null ? '–' : bortleOf(sqmOf(r)).toFixed(1)}</td><td>{l.bortle ?? '–'}</td>
-                <td>{r != null && <span className="szone" style={{ background: zoneOf(r).color }} />}</td>
-              </tr>
-            )
-          })}
-        </tbody></table>
-      </section>
+      <div className="sgrid">
+        <section className="card">
+          <h3>Your sites</h3>
+          <table className="ssites"><thead><tr><th /><th>Site</th><th>SQM</th><th>Bortle ≈</th><th>Set</th><th>{home ? `From ${home.name}` : ''}</th></tr></thead><tbody>
+            {sorted.map((l) => {
+              const r = others[l.id], isHome = l.id === store.homeId
+              return (
+                <tr key={l.id} className={l.id === loc.id ? 'on' : ''} onClick={() => store.setActive(l.id)}>
+                  <td><button className={`sstar ${isHome ? 'on' : ''}`} title={isHome ? 'Home site (the app opens here)' : 'Make this your home site'} onClick={(e) => { e.stopPropagation(); store.setHome(isHome ? undefined : l.id) }}>{isHome ? '★' : '☆'}</button></td>
+                  <td>{l.name}</td>
+                  <td>{r == null ? '–' : <><span className="szone" style={{ background: zoneOf(r).color }} /> {sqmOf(r).toFixed(2)}</>}</td>
+                  <td>{r == null ? '–' : bortleOf(sqmOf(r)).toFixed(1)}</td><td>{l.bortle ?? '–'}</td>
+                  <td>{home && !isHome ? `${Math.round(kmFrom(home, l))} km` : ''}</td>
+                </tr>
+              )
+            })}
+          </tbody></table>
+          {!home && <p className="note">Mark your home site with ☆: the app opens there, whichever site you looked at last.</p>}
+          <h3 className="sadd">Add a site</h3>
+          <div className="row">
+            <input placeholder="Town, park, address…" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && search()} />
+            <button onClick={search}>Search</button><button onClick={mine} title="Add the place you are now">📍 Here</button>
+          </div>
+          {msg && <p className="note">{msg}</p>}
+          {hits && hits.length > 0 && <ul className="shits">{hits.map((h) => <li key={`${h.lat},${h.lon}`} onClick={() => addAt(h.lat, h.lon, h.name)}><b>{h.name}</b> <small>{h.detail}</small></li>)}</ul>}
+          <p className="note fine">Or click the map and choose “Save as new site”. Elevation, time zone and sky darkness are filled in for you. Place search: © OpenStreetMap contributors.</p>
+        </section>
+        <SiteDetails loc={loc} store={store} />
+      </div>
       <p className="note fine">Sky brightness: <a href="https://djlorenz.github.io/astronomy/lp/" target="_blank" rel="noreferrer">{LP_CREDIT}</a>. Zenith values, moonless and clear; real nights vary with haze, snow and the time of night.</p>
     </div>
   )

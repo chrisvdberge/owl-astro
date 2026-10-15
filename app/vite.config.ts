@@ -36,7 +36,8 @@ export default defineConfig({
         navigateFallback: '/index.html',
         cleanupOutdatedCaches: true,
         runtimeCaching: [
-          // forecast: fresh when online, the last one when not
+          // forecast and comet brightness: fresh when online, the last one when not
+          { urlPattern: ({ url }) => url.pathname === '/api/cobs/comets', handler: 'NetworkFirst', options: { cacheName: 'comets', networkTimeoutSeconds: 6, expiration: { maxEntries: 2, maxAgeSeconds: WEEK } } },
           { urlPattern: /^https:\/\/api\.open-meteo\.com\//, handler: 'NetworkFirst', options: { cacheName: 'forecast', networkTimeoutSeconds: 6, expiration: { maxEntries: 20, maxAgeSeconds: 24 * 3600 }, cacheableResponse: cors200 } },
           // survey tiles for the places you looked at, so the sky view still shows them in the field
           { urlPattern: ({ url }) => /\/Norder\d+\//.test(url.pathname) || /\/properties$/.test(url.pathname), handler: 'CacheFirst', options: { cacheName: 'sky-tiles', expiration: { maxEntries: 1500, maxAgeSeconds: 30 * 24 * 3600 }, cacheableResponse: cors200 } },
@@ -47,4 +48,6 @@ export default defineConfig({
       },
     }),
   ],
+  // in production the worker (worker/index.js) serves /api/cobs/comets trimmed; in dev the raw COBS list is proxied
+  server: { proxy: { '/api/cobs/comets': { target: 'https://cobs.si', changeOrigin: true, rewrite: () => '/api/comet_list.api?is-active=true' } } },
 })

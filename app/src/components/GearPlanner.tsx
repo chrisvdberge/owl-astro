@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { customObject, searchCatalog, type CatObject } from '../lib/catalog'
+import { extraObject, searchCatalog, type CatObject } from '../lib/catalog'
 import { DEFAULT_BORTLE, SKY_MAG, type Filter } from '../lib/exposure'
 import { MOUNTS, REFS, analyse, defaultMount, fmtS, pct, type Analysis, type Conditions, type Tone } from '../lib/gearplan'
 import { SETUPS_KEY, savedSetups, setupLabel } from '../lib/gear'
@@ -114,7 +114,7 @@ export default function GearPlanner({ store, catalog, scope }: { store: Store; c
 
   // target for the field comparison
   const byId = useMemo(() => new Map(catalog.map((o) => [o.id, o])), [catalog])
-  const wishTargets = useMemo(() => store.wishlist.flatMap((w) => { const o = byId.get(w.id) ?? (w.custom ? customObject(w.id, w.custom) : undefined); return o ? [o] : [] }), [store.wishlist, byId])
+  const wishTargets = useMemo(() => store.wishlist.flatMap((w) => { const o = byId.get(w.id) ?? extraObject(w); return o ? [o] : [] }), [store.wishlist, byId])
   const [targetId, setTargetId] = useState(() => { try { return localStorage.getItem('astroplanner.gear.target') ?? 'NGC 224' } catch { return 'NGC 224' } })
   const [q, setQ] = useState('')
   const hits = useMemo(() => (q.length > 1 ? searchCatalog(catalog, q, 8) : []), [catalog, q])

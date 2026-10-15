@@ -1,21 +1,36 @@
+import { cometObject, isComet, type CometTarget } from './comets'
+
 export interface CatObject {
   id: string; m: string | null; type: string; typeName: string
   ra: number; dec: number; con: string
   maj: number | null; min: number | null; pa: number | null
   mag: number | null; sb: number | null
   names: string[]; alt: string[]
+  /** moving targets (comets): position at a moment; ra/dec hold the position when the object was made */
+  track?: (t: Date) => [ra: number, dec: number]
+  /** comets: expected magnitude at a moment */
+  magAt?: (t: Date) => number
+  comet?: CometTarget
 }
 
 /** A user-named field that is not a catalog object (a frame on a star field, a Milky Way patch…). */
 export interface CustomTarget { name: string; ra: number; dec: number; con: string }
 
-export const isCustom = (id: string) => id.startsWith('custom:')
+/** Not a catalogue object: a user-named field or a comet (titled by `names[0]`). */
+export const isCustom = (id: string) => id.startsWith('custom:') || isComet(id)
 
 /** Catalog-shaped stand-in so custom fields flow through the planner and sky view like any object. */
 export const customObject = (id: string, c: CustomTarget): CatObject => ({
   id, m: null, type: 'Other', typeName: 'Custom field', ra: c.ra, dec: c.dec, con: c.con,
   maj: null, min: null, pa: null, mag: null, sb: null, names: [c.name], alt: [],
 })
+
+/** The object a non-catalogue wishlist item stands for: its custom field or comet. */
+export const extraObject = (w: { id: string; custom?: CustomTarget; comet?: CometTarget }): CatObject | undefined =>
+  w.custom ? customObject(w.id, w.custom) : w.comet ? cometObject(w.comet) : undefined
+/** What a wishlist entry needs to keep for a non-catalogue object. */
+export const extraOf = (o: CatObject): { custom?: CustomTarget; comet?: CometTarget } =>
+  o.comet ? { comet: o.comet } : o.id.startsWith('custom:') ? { custom: { name: o.names[0], ra: o.ra, dec: o.dec, con: o.con } } : {}
 
 export async function loadCatalog(): Promise<CatObject[]> {
   const res = await fetch('/catalog.json')

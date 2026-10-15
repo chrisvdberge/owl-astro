@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import A from 'aladin-lite'
-import { CATALOGS, catalogTag, customObject, findBySlug, isCustom, loadCatalog, searchCatalog, sexa, slugOf, type CatObject, type CustomTarget } from './lib/catalog'
+import { CATALOGS, catalogTag, customObject, extraObject, extraOf, findBySlug, isCustom, loadCatalog, searchCatalog, sexa, slugOf, type CatObject, type CustomTarget } from './lib/catalog'
 import { CAMERAS, findCamera, PRESETS, SCOPES, SEEING, compute, framingFit, mosaicPanels, rectCorners, sessionCrop, type Optics } from './lib/optics'
 import { scopeName } from './components/FramingPreview'
 import { SURVEYS, defaultSurvey } from './lib/surveys'
@@ -19,6 +19,8 @@ import Tonight from './components/Tonight'
 import PwaStatus from './components/PwaStatus'
 import { useOnline } from './lib/online'
 import Catalogue from './components/Catalogue'
+import Comets from './components/Comets'
+import { cometObject, isComet, loadComets, loadedComet } from './lib/comets'
 import DepthMap from './components/DepthMap'
 import { DEFAULT_BORTLE } from './lib/exposure'
 import { cropAtDepth } from './lib/depth'
@@ -34,7 +36,7 @@ import { gearNames, setupLabel } from './lib/gear'
 import { analyseSite } from './lib/lightpollution'
 
 
-type View = 'tonight' | 'sky' | 'targets' | 'browse' | 'plan' | 'log' | 'gear' | 'sites' | 'inspector' | 'settings'
+type View = 'tonight' | 'sky' | 'targets' | 'browse' | 'comets' | 'plan' | 'log' | 'gear' | 'sites' | 'inspector' | 'settings'
 const nameOf = (o: CatObject) => (isCustom(o.id) ? o.names[0] : o.m ?? o.id)
 /** One-line summary for identifying an object on the sky: type, magnitude, size. */
 const objFacts = (o: CatObject) => [o.typeName, o.mag != null && `${o.mag.toFixed(1)} mag`, o.maj != null && `${+o.maj.toFixed(1)}′${o.min != null && o.min !== o.maj ? `×${+o.min.toFixed(1)}′` : ''}`].filter(Boolean).join(' · ')
@@ -51,6 +53,7 @@ export default function App() {
   const ground = useRef<any[]>([]) // eslint-disable-line @typescript-eslint/no-explicit-any
   const domes = useRef<any[]>([]) // eslint-disable-line @typescript-eslint/no-explicit-any
   const figures = useRef<any[]>([]) // eslint-disable-line @typescript-eslint/no-explicit-any
+  const cometLayers = useRef<any[]>([]) // eslint-disable-line @typescript-eslint/no-explicit-any
   const [catalog, setCatalog] = useState<CatObject[]>([])
   const [query, setQuery] = useState('')
   const [catFilter, setCatFilter] = useState('all')
@@ -90,9 +93,9 @@ export default function App() {
   // the page comes from the URL: /tonight[/date], /sky[/target], /targets[/browse], /plan, /log, /setup/{gear,sites,inspector,settings}
   const route = useRoute()
   const [p0, p1] = route.path
-  const view: View = p0 === 'sky' ? 'sky' : p0 === 'targets' ? (p1 === 'browse' ? 'browse' : 'targets') : p0 === 'plan' ? 'plan' : p0 === 'log' ? 'log'
+  const view: View = p0 === 'sky' ? 'sky' : p0 === 'targets' ? (p1 === 'browse' ? 'browse' : p1 === 'comets' ? 'comets' : 'targets') : p0 === 'plan' ? 'plan' : p0 === 'log' ? 'log'
     : p0 === 'setup' ? (p1 === 'gear' ? 'gear' : p1 === 'inspector' ? 'inspector' : p1 === 'settings' ? 'settings' : 'sites') : 'tonight'
-  const section = view === 'browse' ? 'targets' : ['gear', 'sites', 'inspector', 'settings'].includes(view) ? 'setup' : view
+  const section = view === 'browse' || view === 'comets' ? 'targets' : ['gear', 'sites', 'inspector', 'settings'].includes(view) ? 'setup' : view
   // the bare address opens on Tonight once there is something to plan, otherwise on the sky
   useEffect(() => { if (!p0) navigate(store.wishlist.some((w) => w.status !== 'done') ? '/tonight' : '/sky', { replace: true }) }, [p0]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (view !== 'sky') { setFrameSel(false); setMenu(null); setHover(null); setPicked(null) } }, [view])
@@ -101,7 +104,17 @@ export default function App() {
   const goView = (v: 'sites') => navigate(`/setup/${v}`)
   // custom fields are targets too (found by their id in URLs)
   const routed = useRef('') // the /sky/<target>?framing route last put on the sky
-  const customs = useMemo(() => store.wishlist.flatMap((w) => (w.custom ? [customObject(w.id, w.custom)] : [])), [store.wishlist])
+  const [cometsTick, setCometsTick] = useState(0) // bumps when the MPC list arrives for a comet linked directly
+  const customs = useMemo(() => {
+    const own = store.wishlist.flatMap((w) => { const o = extraObject(w); return o ? [o] : [] })
+    // a comet opened from the comet list (or a shared link) before it is one of your targets
+    const slugs = [route.query.get('target'), p0 === 'sky' ? p1 : null].filter((x): x is string => !!x && isComet(x) && !own.some((o) => o.id === x))
+    return [...own, ...slugs.flatMap((id) => { const c = loadedComet(id); return c ? [cometObject(c)] : [] })]
+  }, [store.wishlist, route.query, p0, p1, cometsTick]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const ids = [route.query.get('target'), p0 === 'sky' ? p1 : null].filter((x): x is string => !!x && isComet(x))
+    if (ids.some((id) => !customs.some((o) => o.id === id))) loadComets().then(() => setCometsTick((n) => n + 1)).catch(() => {})
+  }, [route.query, p0, p1, customs])
   // target details open over any page as ?target=m31: back closes them and the link can be shared
   const detailSlug = route.query.get('target')
   const detail = useMemo(() => (detailSlug && catalog.length ? findBySlug(catalog, detailSlug, customs) ?? null : null), [detailSlug, catalog, customs])
@@ -229,6 +242,12 @@ export default function App() {
         A.graphicOverlay({ name: 'light dome edge', color: '#fbbf24', lineWidth: 1.5, lineDash: [4, 4] }),
       ]
       for (const o of domes.current) aladin.current.addOverlay(o)
+      // a comet's path over the weeks around the viewed moment, with date marks
+      cometLayers.current = [
+        A.graphicOverlay({ name: 'comet path', color: 'rgba(163,230,53,0.75)', lineWidth: 1.5 }),
+        A.catalog({ name: 'comet dates', shape: 'circle', sourceSize: 6, color: '#a3e635', displayLabel: true, labelColumn: 'name', labelColor: '#d9f99d', labelFont: '11px sans-serif' }),
+      ]
+      aladin.current.addOverlay(cometLayers.current[0]); aladin.current.addCatalog(cometLayers.current[1])
       overlay.current = A.graphicOverlay({ color: '#38bdf8', lineWidth: 2 })
       aladin.current.addOverlay(overlay.current)
       setReady(true)
@@ -275,6 +294,27 @@ export default function App() {
     }
     for (const corners of mosaicPanels(frame.ra, frame.dec, res.fovW, res.fovH, pa, mosaic.cols, mosaic.rows)) overlay.current.add(A.polygon(corners, { color: frameSel ? '#fbbf24' : '#38bdf8', lineWidth: frameSel ? 3 : 2 }))
   }, [ready, frame, res.fovW, res.fovH, pa, mosaic, frameSel, plan, session])
+
+  // the comet's path: −10 … +30 days around the viewed moment, a mark per day, dated every 5 days and at the moment itself
+  const day = Math.floor(when.getTime() / 86400000)
+  useEffect(() => {
+    if (!ready) return
+    const [line, marks] = cometLayers.current
+    line.removeAll(); marks.removeAll(); line.reportChange?.()
+    const track = target.obj?.track
+    if (!track) return
+    const t0 = when.getTime(), pts: [number, number][] = []
+    for (let h = -240; h <= 720; h += 6) pts.push(track(new Date(t0 + h * 3600000)))
+    // split where the path crosses RA 0/360 so the line does not wrap around the sky
+    let run: [number, number][] = []
+    for (const p of pts) { if (run.length && Math.abs(p[0] - run[run.length - 1][0]) > 180) { line.add(A.polyline(run)); run = [] } run.push(p) }
+    if (run.length > 1) line.add(A.polyline(run))
+    const date = (t: number) => new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+    marks.addSources(Array.from({ length: 41 }, (_, k) => k - 10).map((d) => {
+      const t = t0 + d * 86400000, [ra, dec] = track(new Date(t))
+      return A.source(ra, dec, { name: d === 0 ? `● ${date(t)} ${clockIn(tzOf(loc), t)}` : d % 5 === 0 ? date(t) : '' })
+    }))
+  }, [ready, target.obj, day, loc]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [conData, setConData] = useState<{ name: string; label: [number, number]; lines: [number, number][][] }[] | null>(null)
   useEffect(() => { if (showCon && !conData) fetch('/constellations.json').then((r) => r.json()).then(setConData).catch(() => {}) }, [showCon, conData])
@@ -530,7 +570,8 @@ export default function App() {
   function show(o: CatObject, fid?: string) { routed.current = ''; navigate(`/sky/${encodeURIComponent(slugOf(o))}${fid ? `?framing=${encodeURIComponent(fid)}` : ''}`) }
 
   function pick(o: CatObject, fid?: string) {
-    setQuery(''); goTo({ ra: o.ra, dec: o.dec, label: nameOf(o), obj: o }, true, fid)
+    const [ra, dec] = o.track ? o.track(when) : [o.ra, o.dec] // moving targets: where they are at the viewed moment
+    setQuery(''); goTo({ ra, dec, label: nameOf(o), obj: o }, true, fid)
   }  // /sky/<target>[?framing=id] puts that target (and framing) on the sky
   useEffect(() => {
     if (view !== 'sky' || !p1 || !catalog.length || !ready) return
@@ -552,6 +593,7 @@ export default function App() {
   /** Catalog object a frame at (ra, dec) is about: the current target if it is in frame, else the most prominent nearby. */
   function objectAt(ra: number, dec: number): CatObject | undefined {
     const reach = Math.hypot(res.fovW * (1 + (mosaic.cols - 1) * 0.8), res.fovH * (1 + (mosaic.rows - 1) * 0.8)) / 2
+    if (target.obj && !catalog.includes(target.obj) && separation(ra, dec, target.ra, target.dec) <= reach) return target.obj
     const near = catalog.map((o) => ({ o, d: separation(ra, dec, o.ra, o.dec) })).filter((x) => x.d <= reach)
     const cur = near.find((x) => x.o.id === target.obj?.id)
     if (cur) return cur.o
@@ -606,7 +648,7 @@ export default function App() {
       rotation: Math.round(pa * 10) / 10, mount, tmin, sess: sess ?? undefined, cols: mosaic.cols, rows: mosaic.rows, survey, ra: c.ra, dec: c.dec,
       viewFov: aladin.current.getFov?.()[0], optics, presetId,
     }
-    store.addWish(obj.id, { status, custom: customTarget })
+    store.addWish(obj.id, { status, ...extraOf(obj) })
     const existing = store.wishlist.find((w) => w.id === obj.id)?.framings ?? []
     const fid = replace ?? crypto.randomUUID()
     if (replace) store.patchFraming(obj.id, fid, data)
@@ -856,7 +898,7 @@ export default function App() {
       <header>
         <Link to="/tonight" className="brand"><img src="/favicon.svg" alt="" width={26} height={26} />Owl Astro</Link>
         <nav className="nav">{NAV.map(([id, to, name]) => <Link key={id} to={to} className={section === id ? 'on' : ''}>{name}{id === 'targets' && store.wishlist.length ? <small>{store.wishlist.length}</small> : null}</Link>)}</nav>
-        <span className="here">{view === 'browse' ? 'Targets' : view === 'sites' ? 'Sites' : view === 'gear' ? 'Gear' : view === 'inspector' ? 'Inspector' : view === 'settings' ? 'Settings' : NAV.find(([id]) => id === view)?.[2]}</span>
+        <span className="here">{view === 'browse' || view === 'comets' ? 'Targets' : view === 'sites' ? 'Sites' : view === 'gear' ? 'Gear' : view === 'inspector' ? 'Inspector' : view === 'settings' ? 'Settings' : NAV.find(([id]) => id === view)?.[2]}</span>
         <span className="sp" />
         {!online && <span className="offline" title="No connection: planning works, forecasts, survey images and sync resume when you are back online">Offline</span>}
         <SiteSwitcher store={store} />
@@ -877,13 +919,15 @@ export default function App() {
       )}
       {view === 'tonight' && <main className="pmain"><Tonight store={store} catalog={catalog} scope={defaultScope} onShow={show} onDetails={setDetail} onSky={() => navigate(skyPath)} onLog={setObs}
         night={p1} onNight={(n) => navigate(n ? `/tonight/${n}` : '/tonight', { replace: true })} /></main>}
-      {(view === 'targets' || view === 'browse') && (
+      {(view === 'targets' || view === 'browse' || view === 'comets') && (
         <main className="pmain">
           <div className="subnav"><h2 className="th">Targets</h2>
             <Link to="/targets" className={view === 'targets' ? 'on' : ''}>Your targets{store.wishlist.length ? ` (${store.wishlist.length})` : ''}</Link>
-            <Link to="/targets/browse" className={view === 'browse' ? 'on' : ''}>Browse catalogue</Link></div>
+            <Link to="/targets/browse" className={view === 'browse' ? 'on' : ''}>Browse catalogue</Link>
+            <Link to="/targets/comets" className={view === 'comets' ? 'on' : ''}>Comets</Link></div>
           {view === 'targets'
             ? <Planner mode="wishlist" store={store} catalog={catalog} onShow={show} onDetails={setDetail} onLog={setObs} />
+            : view === 'comets' ? <Comets store={store} onDetails={setDetail} onShow={show} />
             : <Catalogue store={store} catalog={catalog} scope={defaultScope} onDetails={setDetail} onShow={show} />}
         </main>
       )}

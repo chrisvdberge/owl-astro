@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { customObject, isCustom, type CatObject } from '../lib/catalog'
+import { extraObject, isCustom, type CatObject } from '../lib/catalog'
 import TargetInfo from './TargetInfo'
 import { gearNames } from '../lib/gear'
 import { PRESETS } from '../lib/optics'
@@ -43,7 +43,7 @@ export default function Planner({ store, catalog, onShow, onDetails, onLog, mode
   }, [loc.lat, loc.lon, loc.elevation, tz]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const items = useMemo(
-    () => wishlist.map((w) => ({ w, o: byId.get(w.id) ?? (w.custom ? customObject(w.id, w.custom) : undefined) })).filter((x): x is { w: typeof x.w; o: CatObject } => !!x.o),
+    () => wishlist.map((w) => ({ w, o: byId.get(w.id) ?? extraObject(w) })).filter((x): x is { w: typeof x.w; o: CatObject } => !!x.o),
     [wishlist, byId],
   )
 
@@ -74,7 +74,7 @@ export default function Planner({ store, catalog, onShow, onDetails, onLog, mode
         return (
           <div key={w.id} className="card">
             <div className="ch">
-              <button className="title" onClick={() => onDetails(o)} title="Details"><b>{label(o)}</b></button> <small>{o.names[0] ?? o.typeName}</small>{w.priority && <span className={`dot ${w.priority}`} title={`${w.priority} priority`} />}
+              <button className="title" onClick={() => onDetails(o)} title="Details"><b>{label(o)}</b></button> <small>{isCustom(o.id) ? o.typeName : o.names[0] ?? o.typeName}</small>{w.priority && <span className={`dot ${w.priority}`} title={`${w.priority} priority`} />}
               <span className="sp" />
               <button onClick={() => onShow(o)}>Show</button>
               <button onClick={() => confirm(`Remove ${o.id}?`) && store.removeWish(w.id)}>✕</button>
@@ -193,7 +193,7 @@ function CalendarView({ month, setMonth, picked, setPicked, onlyOpen, setOnlyOpe
       {rows.length === 0 && <p className="note">Nothing on the list for this night.</p>}
       {rows.map(({ w, o, r }) => (
         <div key={w.id} className={`cand ${r.suitable ? '' : 'no'}`}>
-          <div className="ch"><button className="title" onClick={() => onDetails(o)} title="Details"><b>{label(o)}</b></button> <small>{o.names[0] ?? o.typeName}</small>{w.status === 'progress' && <span className="tag">in progress</span>}
+          <div className="ch"><button className="title" onClick={() => onDetails(o)} title="Details"><b>{label(o)}</b></button> <small>{isCustom(o.id) ? o.typeName : o.names[0] ?? o.typeName}</small>{w.status === 'progress' && <span className="tag">in progress</span>}
             <span className="sp" /><b className="sc" style={{ color: scoreColor(Math.max(r.score, 30)) }}>{r.score}</b></div>
           <div className="tl">{r.usable.map((u, i) => <span key={i} className={u ? 'u' : ''} />)}</div>
           {cloud && nights[picked] && nights[picked].samples.some((e) => cloudAt(cloud, e.t) !== undefined) && (

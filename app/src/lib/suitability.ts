@@ -67,16 +67,25 @@ export interface NightResult {
   usable: boolean[]
 }
 
-export interface Target { ra: number; dec: number; type: string }
+/**
+ * `track`: moving targets (comets) give their position per moment; it is taken once per night, at the night's middle.
+ * `magAt`: their expected brightness; nights where it is fainter than COMET_LIMIT do not count.
+ */
+export interface Target { ra: number; dec: number; type: string; track?: (t: Date) => [number, number]; magAt?: (t: Date) => number }
+/** Faintest comet worth an imaging night with small-telescope gear (a diffuse coma fades much faster than its magnitude suggests). */
+export const COMET_LIMIT = 13
 
 export function scoreNights(loc: Location, target: Target, nights: EphemNight[], s: Settings, tolerance?: MoonTolerance): NightResult[] {
   const tol = tolerance ?? defaultMoonTolerance(target.type)
   const obs = new Astronomy.Observer(loc.lat, loc.lon, loc.elevation)
   return nights.map((n) => {
+    const mid = new Date(n.samples[n.samples.length >> 1].t)
+    const [ra, dec] = target.track ? target.track(mid) : [target.ra, target.dec]
+    const faint = !!target.magAt && target.magAt(mid) > COMET_LIMIT
     let weighted = 0, raw = 0, peak = 0, peakAt = 0, moonUp = 0, sepSum = 0
     const usable: boolean[] = []
     for (const e of n.samples) {
-      const hz = Astronomy.Horizon(new Date(e.t), obs, target.ra / 15, target.dec, 'normal')
+      const hz = Astronomy.Horizon(new Date(e.t), obs, ra / 15, dec, 'normal')
       const ok = e.sun < -12 && hz.altitude >= limitAlt(loc, hz.azimuth, s.minAlt)
       usable.push(ok)
       if (!ok) continue
@@ -84,14 +93,14 @@ export function scoreNights(loc: Location, target: Target, nights: EphemNight[],
       raw += w
       weighted += e.sun < -18 ? w : w * 0.6
       if (hz.altitude > peak) { peak = hz.altitude; peakAt = e.t }
-      if (e.moonAlt > 0) { moonUp++; sepSum += separation(target.ra, target.dec, e.moonRa, e.moonDec) }
+      if (e.moonAlt > 0) { moonUp++; sepSum += separation(ra, dec, e.moonRa, e.moonDec) }
     }
     const samplesUsed = Math.max(1, usable.filter(Boolean).length)
     const upFrac = moonUp / samplesUsed
     const sep = moonUp ? sepSum / moonUp : 180
     const sepFactor = sep < 30 ? 1 : sep > 90 ? 0.3 : 1 - ((sep - 30) / 60) * 0.7
     const moonPenalty = Math.min(1, n.illum * upFrac * sepFactor * (tol === 'tolerant' ? 0.3 : 1))
-    const suitable = raw >= s.minHours
+    const suitable = raw >= s.minHours && !faint
     const hoursScore = Math.min(weighted / 7, 1)
     const altScore = Math.min(Math.max((peak - s.minAlt) / 35, 0), 1)
     const score = suitable ? Math.round(100 * (0.65 * hoursScore + 0.2 * altScore + 0.15) * (1 - 0.9 * moonPenalty)) : 0

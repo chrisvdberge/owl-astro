@@ -17,7 +17,7 @@ export type Op =
   | { table: 'settings'; kind: 'upsert'; id: 'settings'; row: Record<string, unknown> }
 
 const locRow = (l: Location) => ({ id: l.id, name: l.name, lat: l.lat, lon: l.lon, elevation: l.elevation, horizon: l.horizon, seeing: l.seeing ?? 3, tz: l.tz ?? null, ...(l.bortle ? { bortle: l.bortle } : {}), ...(l.glow?.length ? { glow: l.glow } : {}) })
-const wishRow = (w: WishItem) => ({ id: w.id, status: w.status, goal_hours: w.goalHours ?? null, notes: w.notes, moon: w.moon ?? null, added: w.added, custom: w.custom ?? null, ...(w.priority ? { priority: w.priority } : {}) })
+const wishRow = (w: WishItem) => ({ id: w.id, status: w.status, goal_hours: w.goalHours ?? null, notes: w.notes, moon: w.moon ?? null, added: w.added, custom: w.custom ?? null, ...(w.priority ? { priority: w.priority } : {}), ...(w.comet ? { comet: w.comet } : {}) })
 const framRow = (w: string, f: Framing) => { const { id, name, created, thumb, ...data } = f; return { id, wish_id: w, name, created, thumb: thumb ?? null, data } }
 const planRow = (b: PlanBlock) => ({ id: b.id, date: b.date, target_id: b.targetId, start_min: b.start, end_min: b.end })
 const sesRow = (w: string, s: Session) => ({ id: s.id, wish_id: w, date: s.date, hours: s.hours, note: s.note, ...(s.setup ? { setup: s.setup } : {}), ...(s.frames ? { frames: s.frames } : {}), ...(s.exposure ? { exposure: s.exposure } : {}) })
@@ -74,7 +74,7 @@ export async function pull(db: SupabaseClient, fallback: Settings): Promise<Data
     activeId: st.data?.active_id && locations.some((x) => x.id === st.data.active_id) ? st.data.active_id : locations[0]?.id ?? '',
     // rows saved before the framings table existed still carry one framing + thumb: upgradeWish folds them in
     wishlist: (w.data ?? []).map((r) => upgradeWish({
-      id: r.id, status: r.status, goalHours: r.goal_hours ?? undefined, notes: r.notes, moon: r.moon ?? undefined, priority: r.priority ?? undefined, added: r.added, custom: r.custom ?? undefined,
+      id: r.id, status: r.status, goalHours: r.goal_hours ?? undefined, notes: r.notes, moon: r.moon ?? undefined, priority: r.priority ?? undefined, added: r.added, custom: r.custom ?? undefined, comet: r.comet ?? undefined,
       framing: r.framing ?? undefined, thumb: r.thumb ?? undefined,
       sessions: sessions.get(r.id) ?? [], framings: framings.get(r.id),
     })),

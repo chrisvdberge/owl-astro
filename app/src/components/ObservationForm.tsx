@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { customObject, isCustom, searchCatalog, type CatObject } from '../lib/catalog'
+import { extraObject, isCustom, searchCatalog, type CatObject } from '../lib/catalog'
 import { unitLabels } from '../lib/gear'
 import { nightNow, tzOf } from '../lib/tz'
 import type { useStore } from '../lib/store'
@@ -17,7 +17,7 @@ export default function ObservationForm({ store, catalog, setup: defaultSetup, p
   const find = (id?: string): CatObject | undefined => {
     if (!id) return undefined
     const w = wishlist.find((x) => x.id === id)
-    return byId.get(id) ?? (w?.custom ? customObject(w.id, w.custom) : undefined)
+    return byId.get(id) ?? (w ? extraObject(w) : undefined)
   }
   const editing = prefill.sessionId ? wishlist.find((w) => w.id === prefill.targetId)?.sessions?.find((x) => x.id === prefill.sessionId) : undefined
   const [target, setTarget] = useState<CatObject | undefined>(() => find(prefill.targetId))

@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { customObject, isCustom, type CatObject } from '../lib/catalog'
+import { extraObject, isCustom, type CatObject } from '../lib/catalog'
 import { setupLabel } from '../lib/gear'
 import { findings, runInspection, type Inspection, type Saved } from '../lib/inspector'
 import { withSensor } from '../lib/exposure'
@@ -51,7 +51,7 @@ export default function Inspector({ store, catalog, scope }: { store: Store; cat
   const setup = setupLabel(scope.optics, scope.presetId)
   const byId = useMemo(() => new Map(catalog.map((o) => [o.id, o])), [catalog])
   const targets = useMemo(() => store.wishlist.flatMap((w) => {
-    const o = byId.get(w.id) ?? (w.custom ? customObject(w.id, w.custom) : undefined)
+    const o = byId.get(w.id) ?? extraObject(w)
     return o ? [{ id: w.id, label: isCustom(w.id) ? o.names[0] : o.m ?? o.id }] : []
   }), [store.wishlist, byId])
   const nameOf = (id?: string) => targets.find((t) => t.id === id)?.label

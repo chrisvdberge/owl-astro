@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { customObject, isCustom, type CatObject } from '../lib/catalog'
+import { extraObject, isCustom, type CatObject } from '../lib/catalog'
 import type { useStore } from '../lib/store'
 import type { ObsPrefill } from './ObservationForm'
 
@@ -14,7 +14,7 @@ export default function Observations({ store, catalog, onDetails, onAdd, onEdit 
   const { wishlist } = store
   const [setup, setSetup] = useState<string>('')
   const byId = useMemo(() => new Map(catalog.map((o) => [o.id, o])), [catalog])
-  const objOf = (id: string, w?: (typeof wishlist)[number]): CatObject | undefined => byId.get(id) ?? (w?.custom ? customObject(id, w.custom) : undefined)
+  const objOf = (id: string, w?: (typeof wishlist)[number]): CatObject | undefined => byId.get(id) ?? (w ? extraObject(w) : undefined)
 
   const all = useMemo(() => wishlist.flatMap((w) => (w.sessions ?? []).map((s) => ({ w, s, setup: s.setup || NONE }))), [wishlist])
   const setups = useMemo(() => {

@@ -31,6 +31,15 @@ the worker in `app/worker/index.js` proxies it at `/api/cobs/comets` (cached 6 h
 A comet added as a target keeps its elements, moves night by night in all planning, gets a finder chart from your site
 in its details, and its path over the coming weeks on the sky view.
 
+## Events
+
+Targets → Events lists what is worth imaging from the active site over the next 30–180 days, computed in the browser
+(`app/src/lib/events.ts`, astronomy-engine): lunar occultations of bright stars and planets and the Moon crossing
+clusters (the Pleiades, the Beehive), close passes of planets with bright stars, Messier/bright deep-sky objects and
+each other, comets passing deep-sky objects, and lunar/solar eclipses. "Show on sky" opens the sky view at that moment
+(`/sky?at=<ms>&ra&dec&fov`), which draws the Moon and planets where they are. Bright stars (V < 4.5) come from SIMBAD
+via `app/scripts/build-stars.mjs` into `app/public/stars.json`.
+
 ## Catalog
 
 `app/public/catalog.json` is generated: `node app/scripts/fetch-catalogs.mjs` downloads the extra catalogs into

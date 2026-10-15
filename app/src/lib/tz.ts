@@ -58,6 +58,17 @@ export function todayIn(tz: string): string {
   return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`
 }
 
+/** Night (the evening's date) + minutes after 17:00 for an instant; daytime instants are clamped to 17:00 / 08:00. */
+export function momentAt(tz: string, ms: number) {
+  const p = parts(tz, ms)
+  const minutes = p.hour * 60 + p.minute
+  const ymd = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+  const day = new Date(p.year, p.month - 1, p.day)
+  if (minutes >= 17 * 60) return { night: ymd(day), tmin: minutes - 17 * 60 }
+  if (minutes < 8 * 60) return { night: ymd(new Date(p.year, p.month - 1, p.day - 1)), tmin: minutes + 7 * 60 }
+  return minutes < 12 * 60 ? { night: ymd(new Date(p.year, p.month - 1, p.day - 1)), tmin: 15 * 60 } : { night: ymd(day), tmin: 0 }
+}
+
 /** Night + minutes after 17:00 for the current moment; by day, tonight at 22:00. */
 export function nightNow(tz: string) {
   const { date, minutes } = localNow(tz)

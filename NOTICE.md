@@ -24,3 +24,4 @@ Colorado School of Mines). Base map © Esri (World Dark Gray Canvas); town names
 
 Comet orbital elements come from the IAU [Minor Planet Center](https://www.minorplanetcenter.net/) (CometEls.txt);
 observed comet magnitudes from [COBS](https://cobs.si), the Comet Observation database (Črni Vrh Observatory).
+Bright stars for event predictions (`app/public/stars.json`, built by `app/scripts/build-stars.mjs`) come from SIMBAD (CDS, Strasbourg).

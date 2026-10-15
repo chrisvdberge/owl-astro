@@ -28,3 +28,10 @@ export function gearNames(optics: Optics, presetId?: string): string[] {
 
 /** Names offered when logging an observation: the all-in-one units. */
 export const unitLabels = () => PRESETS.filter((p) => p.id !== 'custom').map((p) => bare(p.label))
+
+export const SETUPS_KEY = 'astroplanner.gear.setups'
+
+/** The setups compared in the gear planner (kept in this browser), or null when none were saved yet. */
+export function savedSetups<T extends { presetId: string; optics: Optics }>(): T[] | null {
+  try { const v = localStorage.getItem(SETUPS_KEY); return v ? JSON.parse(v) : null } catch { return null }
+}

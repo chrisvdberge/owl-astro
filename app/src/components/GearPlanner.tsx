@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { customObject, searchCatalog, type CatObject } from '../lib/catalog'
 import { DEFAULT_BORTLE, SKY_MAG, type Filter } from '../lib/exposure'
 import { MOUNTS, REFS, analyse, defaultMount, fmtS, pct, type Analysis, type Conditions, type Tone } from '../lib/gearplan'
-import { setupLabel } from '../lib/gear'
+import { SETUPS_KEY, savedSetups, setupLabel } from '../lib/gear'
 import { CAMERAS, PRESETS, findCamera, SCOPES, SEEING, framingFit, type Optics } from '../lib/optics'
 import { cutoutUrl } from '../lib/hips2fits'
 import { defaultSurvey } from '../lib/surveys'
@@ -12,14 +12,12 @@ import { panelPolygons, type Scope } from './FramingPreview'
 type Store = ReturnType<typeof useStore>
 type Setup = Scope & { key: string; mount?: string; guided?: boolean }
 
-const SETUPS_KEY = 'astroplanner.gear.setups'
 const COND_KEY = 'astroplanner.gear.conditions'
 const COLORS = ['#38bdf8', '#fbbf24', '#f472b6', '#4ade80']
 const MAX = 4
 const AIO = PRESETS.filter((p) => p.id !== 'custom')
 const near = (a: number, b: number) => Math.abs(a - b) < 1e-6
 const load = <T,>(k: string, d: T): T => { try { const v = localStorage.getItem(k); return v ? { ...d, ...JSON.parse(v) } : d } catch { return d } }
-const loadList = <T,>(k: string): T[] | null => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null } catch { return null } }
 const put = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch { /* storage unavailable */ } }
 const hrs = (h?: number) => (h == null ? '–' : h >= 200 ? '> 200 h' : h < 1 ? `${Math.max(5, Math.round((h * 60) / 5) * 5)} min` : `${h >= 20 ? Math.round(h) : h.toFixed(1)} h`)
 const costTone = (x: number): Tone => (x <= 0.12 ? 'ok' : x <= 0.3 ? 'warn' : 'bad')
@@ -106,7 +104,7 @@ const SAMPLE = { under: 'Under', ok: 'Good', over: 'Over' } as const
 /** Compare telescopes and cameras: field, resolution against the site's seeing, light grasp, sensor and sub-exposure behaviour. */
 export default function GearPlanner({ store, catalog, scope }: { store: Store; catalog: CatObject[]; scope: Scope }) {
   const loc = store.active
-  const [setups, setSetups] = useState<Setup[]>(() => loadList<Setup>(SETUPS_KEY) ?? [{ ...scope, key: crypto.randomUUID() }, starter()])
+  const [setups, setSetups] = useState<Setup[]>(() => savedSetups<Setup>() ?? [{ ...scope, key: crypto.randomUUID() }, starter()])
   const save = (next: Setup[]) => { setSetups(next); put(SETUPS_KEY, next) }
   const [cond, setCond] = useState(() => load(COND_KEY, { subSec: 60, filter: 'none' as Filter, moon: 0, seeing: 0 }))
   const patchCond = (p: Partial<typeof cond>) => { const next = { ...cond, ...p }; setCond(next); put(COND_KEY, next) }

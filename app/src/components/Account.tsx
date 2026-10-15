@@ -36,8 +36,8 @@ export default function Account({ auth, status }: { auth: ReturnType<typeof useA
               <>
                 <p>We sent an email to <b>{email}</b>. Click the link in it, or type the code from the email here:</p>
                 <div className="row">
-                  <input inputMode="numeric" autoComplete="one-time-code" placeholder="6-digit code" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} />
-                  <button disabled={code.length !== 6 || busy} onClick={async () => { setBusy(true); const err = await auth.verifyCode(email, code); setBusy(false); if (err) setMsg(err); else { setOpen(false); setSent(false); setCode(''); setMsg(null) } }}>Sign in</button>
+                  <input inputMode="numeric" autoComplete="one-time-code" placeholder="Code from the email" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 10))} />
+                  <button disabled={code.length < 6 || busy} onClick={async () => { setBusy(true); const err = await auth.verifyCode(email, code); setBusy(false); if (err) setMsg(err); else { setOpen(false); setSent(false); setCode(''); setMsg(null) } }}>Sign in</button>
                 </div>
                 {msg && <p className="note" style={{ color: 'var(--bad)' }}>{msg}</p>}
                 <p className="note">No email? Check your spam folder, or <button className="linkish" onClick={() => { setSent(false); setMsg(null) }}>use another address</button>.</p>

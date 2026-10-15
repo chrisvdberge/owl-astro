@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CATALOGS, catalogTag, searchCatalog, type CatObject } from '../lib/catalog'
 import { compute, framingFit } from '../lib/optics'
+import { savedSetups, setupLabel } from '../lib/gear'
 import { defaultSurvey } from '../lib/surveys'
 import { cutoutUrl } from '../lib/hips2fits'
 import { filterShort } from '../lib/filters'
@@ -24,9 +25,13 @@ const GROUPS: { id: string; label: string; test: (o: CatObject) => boolean }[] =
 ]
 const MAGS = [{ v: 99, l: 'Any magnitude' }, { v: 6, l: 'Brighter than 6' }, { v: 8, l: 'Brighter than 8' }, { v: 10, l: 'Brighter than 10' }, { v: 12, l: 'Brighter than 12' }]
 const SIZES = [{ v: 0, l: 'Any size' }, { v: 5, l: '≥ 5′' }, { v: 15, l: '≥ 15′' }, { v: 30, l: '≥ 30′' }, { v: 60, l: '≥ 1°' }]
-const SORTS = [{ id: 'bright', label: 'Brightest' }, { id: 'large', label: 'Largest' }, { id: 'name', label: 'Name' }, { id: 'tonight', label: 'Best tonight' }]
+const FILLS = [{ v: 0, l: 'Any frame fill' }, { v: 0.02, l: 'Fills ≥ 2% of frame' }, { v: 0.05, l: 'Fills ≥ 5% of frame' }, { v: 0.1, l: 'Fills ≥ 10% of frame' }, { v: 0.25, l: 'Fills ≥ 25% of frame' }, { v: 0.5, l: 'Fills ≥ 50% of frame' }]
+const SORTS = [{ id: 'bright', label: 'Brightest' }, { id: 'large', label: 'Largest' }, { id: 'fill', label: 'Fills frame most' }, { id: 'name', label: 'Name' }, { id: 'tonight', label: 'Best tonight' }]
 
 const title = (o: CatObject) => (o.m ? `${o.m.replace(' ', '')} · ${o.id}` : o.id)
+/** Share of the sensor's pixels the object covers: its ellipse over the frame, capped at a full frame. Null when its size is unknown. */
+const frameFill = (o: CatObject, fovW: number, fovH: number) => (o.maj ? Math.min(1, (Math.PI / 4) * (o.maj / 60) * ((o.min ?? o.maj) / 60) / (fovW * fovH)) : null)
+const pctFill = (f: number) => (f >= 1 ? '100%' : f < 0.01 ? '<1%' : `${Math.round(f * 100)}%`)
 const natural = (a: string, b: string) => a.localeCompare(b, 'en', { numeric: true })
 
 /** The catalogue as a grid of information cards: filter, sort, star, open details. */
@@ -41,6 +46,8 @@ export default function Catalogue({ store, catalog, scope, onDetails, onShow }: 
   const [con, setCon] = useState('')
   const [mag, setMag] = useState(99)
   const [size, setSize] = useState(0)
+  const [fill, setFill] = useState(0)
+  const [setupIx, setSetupIx] = useState(0)
   const [sort, setSort] = useState('bright')
   const [query, setQuery] = useState('')
   const [onlyUp, setOnlyUp] = useState(false)
@@ -55,7 +62,16 @@ export default function Catalogue({ store, catalog, scope, onDetails, onShow }: 
   }
 
   const wishById = useMemo(() => new Map(wishlist.map((w) => [w.id, w])), [wishlist])
-  const fov = useMemo(() => compute(scope.optics, 3), [scope])
+  // the default setup first, then any others saved in the gear planner (same gear only once)
+  const setups = useMemo(() => {
+    const seen = new Set<string>()
+    return [scope, ...(savedSetups<Scope>() ?? [])].filter((s) => {
+      const k = setupLabel(s.optics, s.presetId) + JSON.stringify(s.optics)
+      return !seen.has(k) && !!seen.add(k)
+    })
+  }, [scope])
+  const setup = setups[setupIx] ?? scope
+  const fov = useMemo(() => compute(setup.optics, 3), [setup])
   const constellations = useMemo(() => [...new Set(catalog.map((o) => o.con))].filter(Boolean).sort(), [catalog])
   const nights = useMemo(() => {
     const [y, m, d] = nightNow(tz).night.split('-').map(Number)
@@ -66,8 +82,8 @@ export default function Catalogue({ store, catalog, scope, onDetails, onShow }: 
     const q = query.trim()
     const base = q.length >= 2 ? searchCatalog(catalog, q, 400, cat) : catalog.filter((o) => CATALOGS.find((c) => c.id === cat)!.test(o))
     const g = GROUPS.find((x) => x.id === group)!
-    return base.filter((o) => g.test(o) && (!con || o.con === con) && (mag >= 99 || (o.mag ?? 99) <= mag) && (!size || (o.maj ?? 0) >= size))
-  }, [catalog, query, cat, group, con, mag, size])
+    return base.filter((o) => g.test(o) && (!con || o.con === con) && (mag >= 99 || (o.mag ?? 99) <= mag) && (!size || (o.maj ?? 0) >= size) && (!fill || (frameFill(o, fov.fovW, fov.fovH) ?? 0) >= fill))
+  }, [catalog, query, cat, group, con, mag, size, fill, fov])
 
   // "best tonight" scores every listed object, so it is only offered for lists short enough to score quickly
   const canScore = filtered.length <= 1000
@@ -83,10 +99,11 @@ export default function Catalogue({ store, catalog, scope, onDetails, onShow }: 
     r = [...r]
     if (sort === 'bright') r.sort((a, b) => (a.mag ?? 99) - (b.mag ?? 99) || natural(a.id, b.id))
     else if (sort === 'large') r.sort((a, b) => (b.maj ?? 0) - (a.maj ?? 0))
+    else if (sort === 'fill') r.sort((a, b) => (frameFill(b, fov.fovW, fov.fovH) ?? -1) - (frameFill(a, fov.fovW, fov.fovH) ?? -1))
     else if (sort === 'name') r.sort((a, b) => natural(a.m ?? a.id, b.m ?? b.id))
     else if (scores) r.sort((a, b) => scores.get(b.id)!.score - scores.get(a.id)!.score)
     return r
-  }, [filtered, sort, scores, onlyUp])
+  }, [filtered, sort, scores, onlyUp, fov])
 
   useEffect(() => setShown(PAGE), [rows])
   useEffect(() => {
@@ -105,6 +122,8 @@ export default function Catalogue({ store, catalog, scope, onDetails, onShow }: 
         <select value={con} onChange={(e) => setCon(e.target.value)}><option value="">All constellations</option>{constellations.map((c) => <option key={c} value={c}>{c}</option>)}</select>
         <select value={mag} onChange={(e) => setMag(+e.target.value)}>{MAGS.map((m) => <option key={m.v} value={m.v}>{m.l}</option>)}</select>
         <select value={size} onChange={(e) => setSize(+e.target.value)}>{SIZES.map((s) => <option key={s.v} value={s.v}>{s.l}</option>)}</select>
+        <select value={fill} onChange={(e) => setFill(+e.target.value)} title="Share of the sensor's pixels the object covers">{FILLS.map((f) => <option key={f.v} value={f.v}>{f.l}</option>)}</select>
+        {setups.length > 1 && <select value={setupIx} onChange={(e) => setSetupIx(+e.target.value)} title="Setup used for frame fill and the fit badges">{setups.map((s, i) => <option key={i} value={i}>{setupLabel(s.optics, s.presetId)}{i === 0 ? ' (default)' : ''}</option>)}</select>}
       </div>
       <div className="catbar">
         <div className="chips">{GROUPS.map((g) => <button key={g.id} className={group === g.id ? 'on' : ''} onClick={() => setGroup(g.id)}>{g.label}</button>)}</div>
@@ -130,6 +149,7 @@ export default function Catalogue({ store, catalog, scope, onDetails, onShow }: 
     const w = wishById.get(o.id)
     const r = scores?.get(o.id) ?? scoreNights(loc, o, nights, settings, w?.moon)[0]
     const f = framingFit(o.maj, o.min, fov.fovW, fov.fovH)
+    const ff = frameFill(o, fov.fovW, fov.fovH)
     const badge = !f ? null : f.kind === 'mosaic' ? { t: `Mosaic ${f.cols}×${f.rows}`, c: 'warn' } : f.kind === 'small' ? { t: 'Tiny', c: 'mute' } : f.ratio > 0.75 ? { t: 'Tight crop', c: 'warn' } : { t: 'Fits', c: 'ok' }
     const cols = f?.cols ?? 1, rows_ = f?.rows ?? 1
     const view = Math.min(20, Math.max(Math.hypot(fov.fovW * (1 + (cols - 1) * 0.8), fov.fovH * (1 + (rows_ - 1) * 0.8)) * 1.15, ((o.maj ?? 0) / 60) * 1.4, 0.6))
@@ -147,7 +167,7 @@ export default function Catalogue({ store, catalog, scope, onDetails, onShow }: 
           {o.names[0] && <p className="cname">{o.names[0]}</p>}
           <p className="note">{o.typeName} · {o.con}{o.mag != null ? ` · mag ${o.mag}` : ''}{o.maj ? ` · ${o.maj}′${o.min ? `×${o.min}′` : ''}` : ''}</p>
           <p className="nchips">
-            {badge && <em className={`badge2 ${badge.c}`}>{badge.t}</em>}
+            {badge && <em className={`badge2 ${badge.c}`} title={ff != null ? `Covers ${pctFill(ff)} of the frame` : ''}>{badge.t}{ff != null && f?.kind !== 'mosaic' ? ` · ${pctFill(ff)}` : ''}</em>}
             <em className="badge2 mute">{filterShort(o.type)}</em>
             <em className="badge2 mute">{catalogTag(o)}</em>
             {r.suitable ? <em className="badge2 ok" title="Tonight">↑ {Math.round(r.peakAlt)}° · {clockIn(tz, r.peakAt)}</em> : <em className="badge2 mute">not up tonight</em>}

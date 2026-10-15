@@ -244,7 +244,7 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
-# Sign-in emails carry both the link and the 6-digit code (the app accepts either). A new address gets the confirmation
+# Sign-in emails carry both the link and the one-time code (the app accepts either, 6–10 digits). A new address gets the confirmation
 # (welcome) email, a known one the magic link. The hosted project needs the same
 # templates set in the dashboard: Authentication → Email Templates → Magic Link and Confirm signup.
 [auth.email.template.magic_link]

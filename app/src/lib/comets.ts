@@ -77,8 +77,16 @@ export function loadComets(): Promise<CometTarget[]> {
 /** Latest observed brightness of a comet (COBS, cobs.si). */
 export interface CometSighting { mag: number; peak: number | null; peakDate: string | null }
 
-/** Observed magnitudes by comet target id; empty when COBS cannot be reached. Production gets a trimmed list from the worker, dev the raw one. */
-export async function loadSightings(): Promise<Map<string, CometSighting>> {
+let sightings: Promise<Map<string, CometSighting>> | null = null
+let sighted: Map<string, CometSighting> | null = null
+/** Observed magnitudes by comet target id (fetched once); empty when COBS cannot be reached. */
+export function loadSightings(): Promise<Map<string, CometSighting>> {
+  sightings ??= fetchSightings().then((m) => { sighted = m; if (!m.size) sightings = null; return m })
+  return sightings
+}
+
+/** Production gets a trimmed list from the worker, dev the raw COBS one. */
+async function fetchSightings(): Promise<Map<string, CometSighting>> {
   try {
     const res = await fetch('/api/cobs/comets')
     if (!res.ok) return new Map()
@@ -98,7 +106,13 @@ const recent = new Map<string, CometTarget>()
 /** Keeps a comet opened from the list (with its observed offset) so its details and sky view can find it by id. */
 export const remember = (c: CometTarget) => recent.set(cometId(c.desig), c)
 /** A comet that is not a target yet, by id: one opened from the list, else from the last loaded MPC list. */
-export const loadedComet = (id: string) => recent.get(id) ?? loaded?.find((c) => cometId(c.desig) === id)
+export function loadedComet(id: string): CometTarget | undefined {
+  const hit = recent.get(id)
+  if (hit) return hit
+  const c = loaded?.find((x) => cometId(x.desig) === id)
+  const obs = sighted?.get(id)
+  return c && obs ? { ...c, dm: +(obs.mag - cometPos(c.el, Date.now()).mag).toFixed(2) } : c
+}
 
 /** Heliocentric position (AU, J2000 equatorial) at epoch ms `t`. */
 function helio(el: CometElements, t: number): [number, number, number] {

@@ -134,7 +134,7 @@ export default function CometFinder({ o, loc, settings, night }: { o: CatObject;
         <polygon className="ground" points={`0,${H} ${ground.join(' ')} ${W},${H}`} />
         <polyline className="hz" points={ground.join(' ')} />
         {runs.map((r, i) => <polyline key={i} className="path" points={r.map((s) => `${X(s.az)},${Y(s.alt)}`).join(' ')} />)}
-        {hours.map((s) => <g key={s.t} className="hr"><circle cx={X(s.az)} cy={Y(s.alt)} r="2.5" /><text x={X(s.az) + 5} y={Y(s.alt) - 5}>{clockIn(tz, s.t)}</text></g>)}
+        {hours.map((s) => <g key={s.t} className="hr"><title>{`${clockIn(tz, s.t)} · ${Math.round(s.alt)}° up${o.magAt ? ` · mag ${o.magAt(new Date(s.t)).toFixed(1)}` : ''}`}</title><circle cx={X(s.az)} cy={Y(s.alt)} r="6" className="hit" /><circle cx={X(s.az)} cy={Y(s.alt)} r="2.5" /><text x={X(s.az) + 5} y={Y(s.alt) - 5}>{clockIn(tz, s.t)}</text></g>)}
         {moon.alt > 0 && inView(moon.az, moon.alt) && <g className="moon"><circle cx={X(moon.az)} cy={Y(moon.alt)} r="7" /><text x={X(moon.az) + 10} y={Y(moon.alt) + 4}>Moon</text></g>}
         {tail && <line className="tail" x1={cx} y1={cy} x2={tail[0]} y2={tail[1]} />}
         <circle className="obj" cx={cx} cy={cy} r="5" />

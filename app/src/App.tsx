@@ -20,7 +20,7 @@ import PwaStatus from './components/PwaStatus'
 import { useOnline } from './lib/online'
 import Catalogue from './components/Catalogue'
 import Comets from './components/Comets'
-import { cometObject, isComet, loadComets, loadedComet } from './lib/comets'
+import { cometObject, isComet, loadComets, loadSightings, loadedComet } from './lib/comets'
 import DepthMap from './components/DepthMap'
 import { DEFAULT_BORTLE } from './lib/exposure'
 import { cropAtDepth } from './lib/depth'
@@ -54,6 +54,7 @@ export default function App() {
   const domes = useRef<any[]>([]) // eslint-disable-line @typescript-eslint/no-explicit-any
   const figures = useRef<any[]>([]) // eslint-disable-line @typescript-eslint/no-explicit-any
   const cometLayers = useRef<any[]>([]) // eslint-disable-line @typescript-eslint/no-explicit-any
+  const cometMarks = useRef<{ ra: number; dec: number; t: number; mag?: number }[]>([]) // the daily dots on a comet's path, for hover tips
   const [catalog, setCatalog] = useState<CatObject[]>([])
   const [query, setQuery] = useState('')
   const [catFilter, setCatFilter] = useState('all')
@@ -77,6 +78,7 @@ export default function App() {
   const [menu, setMenu] = useState<{ x: number; y: number; ra: number; dec: number } | null>(null)
   const [hover, setHover] = useState<{ o: CatObject; x: number; y: number } | null>(null) // object under the cursor
   const [picked, setPicked] = useState<{ o: CatObject; x: number; y: number } | null>(null) // object clicked on the sky
+  const [markTip, setMarkTip] = useState<{ t: number; mag?: number; x: number; y: number } | null>(null) // a comet path dot under the cursor
   const [toast, setToast] = useState('')
   const [coordIn, setCoordIn] = useState('')
   const [ready, setReady] = useState(false)
@@ -98,7 +100,7 @@ export default function App() {
   const section = view === 'browse' || view === 'comets' ? 'targets' : ['gear', 'sites', 'inspector', 'settings'].includes(view) ? 'setup' : view
   // the bare address opens on Tonight once there is something to plan, otherwise on the sky
   useEffect(() => { if (!p0) navigate(store.wishlist.some((w) => w.status !== 'done') ? '/tonight' : '/sky', { replace: true }) }, [p0]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (view !== 'sky') { setFrameSel(false); setMenu(null); setHover(null); setPicked(null) } }, [view])
+  useEffect(() => { if (view !== 'sky') { setFrameSel(false); setMenu(null); setHover(null); setPicked(null); setMarkTip(null) } }, [view])
   const skyPath = target.obj ? `/sky/${encodeURIComponent(slugOf(target.obj))}` : '/sky'
   const NAV: [string, string, string, string][] = [['tonight', '/tonight', 'Tonight', '☾'], ['sky', skyPath, 'Sky', '✦'], ['targets', '/targets', 'Targets', '☆'], ['plan', '/plan', 'Plan', '▦'], ['log', '/log', 'Log', '✎']]
   const goView = (v: 'sites') => navigate(`/setup/${v}`)
@@ -113,7 +115,7 @@ export default function App() {
   }, [store.wishlist, route.query, p0, p1, cometsTick]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const ids = [route.query.get('target'), p0 === 'sky' ? p1 : null].filter((x): x is string => !!x && isComet(x))
-    if (ids.some((id) => !customs.some((o) => o.id === id))) loadComets().then(() => setCometsTick((n) => n + 1)).catch(() => {})
+    if (ids.some((id) => !customs.some((o) => o.id === id))) Promise.all([loadComets(), loadSightings()]).then(() => setCometsTick((n) => n + 1)).catch(() => {})
   }, [route.query, p0, p1, customs])
   // target details open over any page as ?target=m31: back closes them and the link can be shared
   const detailSlug = route.query.get('target')
@@ -301,7 +303,8 @@ export default function App() {
     if (!ready) return
     const [line, marks] = cometLayers.current
     line.removeAll(); marks.removeAll(); line.reportChange?.()
-    const track = target.obj?.track
+    cometMarks.current = []
+    const track = target.obj?.track, magAt = target.obj?.magAt
     if (!track) return
     const t0 = when.getTime(), pts: [number, number][] = []
     for (let h = -240; h <= 720; h += 6) pts.push(track(new Date(t0 + h * 3600000)))
@@ -312,6 +315,7 @@ export default function App() {
     const date = (t: number) => new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
     marks.addSources(Array.from({ length: 41 }, (_, k) => k - 10).map((d) => {
       const t = t0 + d * 86400000, [ra, dec] = track(new Date(t))
+      cometMarks.current.push({ ra, dec, t, mag: magAt?.(new Date(t)) })
       return A.source(ra, dec, { name: d === 0 ? `● ${date(t)} ${clockIn(tzOf(loc), t)}` : d % 5 === 0 ? date(t) : '' })
     }))
   }, [ready, target.obj, day, loc]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -425,6 +429,17 @@ export default function App() {
       } catch { return null }
       return result
     }
+    /** A dot on the comet's path within a few px of a view position. */
+    const markUnder = (x: number, y: number) => {
+      let best, bestD = 8
+      for (const m of cometMarks.current) {
+        let p: [number, number] | undefined
+        try { p = aladin.current?.world2pix?.(m.ra, m.dec) } catch { continue }
+        const d = p ? Math.hypot(p[0] - x, p[1] - y) : Infinity
+        if (d < bestD) { bestD = d; best = m }
+      }
+      return best
+    }
     /** Catalog object at a view position: a marker within a few px of the cursor, else the smallest object whose extent covers it. */
     const objectUnder = (x: number, y: number): CatObject | undefined => {
       let w: [number, number] | undefined
@@ -455,7 +470,7 @@ export default function App() {
       down = { x, y }; moved = false
       const h = hit(x, y)
       // a selected frame drags from anywhere on it; grabbing the outline of an unselected one selects and drags it in one go
-      setHover(null); setPicked(null)
+      setHover(null); setPicked(null); setMarkTip(null)
       if (h && (live.current.sel || h === 'edge')) {
         if (!live.current.sel) { live.current.sel = true; setFrameSel(true) }
         try {
@@ -484,7 +499,9 @@ export default function App() {
         const inside = el.contains(e.target as Node) && !onFrame
         cancelAnimationFrame(hoverFrame)
         hoverFrame = requestAnimationFrame(() => {
-          const o = inside ? objectUnder(x, y) : undefined
+          const m = inside ? markUnder(x, y) : undefined
+          setMarkTip(m ? { t: m.t, mag: m.mag, x: e.clientX, y: e.clientY } : null)
+          const o = inside && !m ? objectUnder(x, y) : undefined
           setHover((prev) => (o ? (prev?.o === o && Math.hypot(prev.x - e.clientX, prev.y - e.clientY) < 2 ? prev : { o, x: e.clientX, y: e.clientY }) : null))
         })
       }
@@ -503,8 +520,8 @@ export default function App() {
       el.classList.remove('dragging')
     }
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setFrameSel(false); setPicked(null) } }
-    const onLeave = () => { cancelAnimationFrame(hoverFrame); setHover(null) }
-    const onWheel = () => { setHover(null); setPicked(null) }
+    const onLeave = () => { cancelAnimationFrame(hoverFrame); setHover(null); setMarkTip(null) }
+    const onWheel = () => { setHover(null); setPicked(null); setMarkTip(null) }
     const stoppers = ['mousedown', 'touchstart', 'mousemove', 'touchmove'] as const
     el.addEventListener('pointerdown', onDown, true)
     for (const t of stoppers) el.addEventListener(t, block, true)
@@ -964,6 +981,12 @@ export default function App() {
           </div>
         )
       })()}
+      {markTip && target.obj && !picked && !menu && (
+        <div className="skytip" style={{ left: Math.min(markTip.x + 14, window.innerWidth - 260), top: markTip.y + 16 }}>
+          <b>{nameOf(target.obj)}</b> · {new Date(markTip.t).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })} {clockIn(tzOf(loc), markTip.t)}
+          <small>{markTip.mag != null ? `mag ${markTip.mag.toFixed(1)}${target.obj.comet?.dm == null ? ' (predicted)' : ''}` : 'brightness unknown'}</small>
+        </div>
+      )}
       {hover && !picked && !menu && (
         <div className="skytip" style={{ left: Math.min(hover.x + 14, window.innerWidth - 260), top: hover.y + 16 }}>
           <b>{nameOf(hover.o)}</b>{hover.o.names[0] && <> · {hover.o.names[0]}</>}<small>{objFacts(hover.o)}</small>

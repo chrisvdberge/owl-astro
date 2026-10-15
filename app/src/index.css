@@ -350,3 +350,9 @@ header .acct { margin-left: 0; }
 .cfind .tick line { stroke: var(--mute); } .cfind .tick text { fill: var(--mute); font-size: 11px; text-anchor: middle; }
 .cfind input[type=range] { width: 100%; margin: 8px 0 2px; }
 .skytip .tipmag { display: block; font-size: 20px; line-height: 1.15; color: #d9f99d; font-variant-numeric: tabular-nums; }
+/* events */
+.evmonth h3 { margin: 18px 0 8px; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--acc); }
+.evrow { display: grid; grid-template-columns: 96px 1fr auto; gap: 12px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; }
+.evrow.off { opacity: .55; } .evrow p { margin: 2px 0; } .evrow .badge2 { margin-right: 4px; }
+.evwhen b { display: block; } .evwhen span { color: var(--mute); font-variant-numeric: tabular-nums; font-size: 13px; }
+@media (max-width: 600px) { .evrow { grid-template-columns: 1fr; gap: 4px; } .evwhen { display: flex; gap: 8px; } }

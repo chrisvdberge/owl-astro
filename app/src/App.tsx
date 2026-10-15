@@ -7,7 +7,7 @@ import { SURVEYS, defaultSurvey } from './lib/surveys'
 import * as Astronomy from 'astronomy-engine'
 import { altAzToRaDec, glowAlt, horizonAlt, limitAlt, lstHours, parallacticAngle, parallacticFromLst, sampleNight, separation, targetAltAz, type Location } from './lib/astro'
 import { useStore, type Status } from './lib/store'
-import { clockIn, nightNow, tzFromCoords, tzOf, zonedEpoch } from './lib/tz'
+import { clockIn, momentAt, nightNow, tzFromCoords, tzOf, zonedEpoch } from './lib/tz'
 import { useAuth } from './lib/auth'
 import Account from './components/Account'
 import HorizonEditor from './components/HorizonEditor'
@@ -20,6 +20,8 @@ import PwaStatus from './components/PwaStatus'
 import { useOnline } from './lib/online'
 import Catalogue from './components/Catalogue'
 import Comets from './components/Comets'
+import Events from './components/Events'
+import type { SkyEvent } from './lib/events'
 import { cometObject, isComet, loadComets, loadSightings, loadedComet } from './lib/comets'
 import DepthMap from './components/DepthMap'
 import { DEFAULT_BORTLE } from './lib/exposure'
@@ -36,7 +38,7 @@ import { gearNames, setupLabel } from './lib/gear'
 import { analyseSite } from './lib/lightpollution'
 
 
-type View = 'tonight' | 'sky' | 'targets' | 'browse' | 'comets' | 'plan' | 'log' | 'gear' | 'sites' | 'inspector' | 'settings'
+type View = 'tonight' | 'sky' | 'targets' | 'browse' | 'comets' | 'events' | 'plan' | 'log' | 'gear' | 'sites' | 'inspector' | 'settings'
 const nameOf = (o: CatObject) => (isCustom(o.id) ? o.names[0] : o.m ?? o.id)
 /** One-line summary for identifying an object on the sky: type, magnitude, size. */
 const objFacts = (o: CatObject) => [o.typeName, o.mag != null && `${o.mag.toFixed(1)} mag`, o.maj != null && `${+o.maj.toFixed(1)}′${o.min != null && o.min !== o.maj ? `×${+o.min.toFixed(1)}′` : ''}`].filter(Boolean).join(' · ')
@@ -54,6 +56,7 @@ export default function App() {
   const domes = useRef<any[]>([]) // eslint-disable-line @typescript-eslint/no-explicit-any
   const figures = useRef<any[]>([]) // eslint-disable-line @typescript-eslint/no-explicit-any
   const cometLayers = useRef<any[]>([]) // eslint-disable-line @typescript-eslint/no-explicit-any
+  const solar = useRef<any[]>([]) // eslint-disable-line @typescript-eslint/no-explicit-any
   const cometMarks = useRef<{ ra: number; dec: number; t: number; mag?: number }[]>([]) // the daily dots on a comet's path, for hover tips
   const [catalog, setCatalog] = useState<CatObject[]>([])
   const [query, setQuery] = useState('')
@@ -96,9 +99,9 @@ export default function App() {
   // the page comes from the URL: /tonight[/date], /sky[/target], /targets[/browse], /plan, /log, /setup/{gear,sites,inspector,settings}
   const route = useRoute()
   const [p0, p1] = route.path
-  const view: View = p0 === 'sky' ? 'sky' : p0 === 'targets' ? (p1 === 'browse' ? 'browse' : p1 === 'comets' ? 'comets' : 'targets') : p0 === 'plan' ? 'plan' : p0 === 'log' ? 'log'
+  const view: View = p0 === 'sky' ? 'sky' : p0 === 'targets' ? (p1 === 'browse' ? 'browse' : p1 === 'comets' ? 'comets' : p1 === 'events' ? 'events' : 'targets') : p0 === 'plan' ? 'plan' : p0 === 'log' ? 'log'
     : p0 === 'setup' ? (p1 === 'gear' ? 'gear' : p1 === 'inspector' ? 'inspector' : p1 === 'settings' ? 'settings' : 'sites') : 'tonight'
-  const section = view === 'browse' || view === 'comets' ? 'targets' : ['gear', 'sites', 'inspector', 'settings'].includes(view) ? 'setup' : view
+  const section = view === 'browse' || view === 'comets' || view === 'events' ? 'targets' : ['gear', 'sites', 'inspector', 'settings'].includes(view) ? 'setup' : view
   // the bare address opens on Tonight once there is something to plan, otherwise on the sky
   useEffect(() => { if (!p0) navigate(store.wishlist.some((w) => w.status !== 'done') ? '/tonight' : '/sky', { replace: true }) }, [p0]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (view !== 'sky') { setFrameSel(false); setMenu(null); setHover(null); setPicked(null); setPickedCon(null); setMarkTip(null) } }, [view])
@@ -216,9 +219,10 @@ export default function App() {
   }, [store.settings.scope])
 
   useEffect(() => {
-    let dead = false
-    A.init.then(() => {
-      if (dead || !viewRef.current || aladin.current) return
+    let dead = false, loaded = false
+    // Aladin is created the first time the sky view is visible: made inside a hidden (zero-size) element it keeps a broken zoom and aspect
+    const start = () => {
+      if (dead || !loaded || !viewRef.current?.clientWidth || aladin.current) return
       aladin.current = A.aladin(viewRef.current, {
         survey: hips('dss2'), target: '83.82 -5.39', fov: 3.5,
         showReticle: false, showCooGrid: false, showFullscreenControl: false, showSimbadPointerControl: false,
@@ -251,11 +255,18 @@ export default function App() {
         A.catalog({ name: 'comet dates', shape: 'circle', sourceSize: 6, color: '#a3e635', displayLabel: true, labelColumn: 'name', labelColor: '#d9f99d', labelFont: '11px sans-serif' }),
       ]
       aladin.current.addOverlay(cometLayers.current[0]); aladin.current.addCatalog(cometLayers.current[1])
+      // the Moon (its disc) and the planets at the viewed moment
+      solar.current = [
+        A.graphicOverlay({ name: 'moon', color: 'rgba(229,231,235,0.9)', lineWidth: 1.5 }),
+        A.catalog({ name: 'planets', shape: 'circle', sourceSize: 9, color: '#fde68a', displayLabel: true, labelColumn: 'name', labelColor: '#fde68a', labelFont: '12px sans-serif' }),
+      ]
+      aladin.current.addOverlay(solar.current[0]); aladin.current.addCatalog(solar.current[1])
       overlay.current = A.graphicOverlay({ color: '#38bdf8', lineWidth: 2 })
       aladin.current.addOverlay(overlay.current)
       setReady(true)
-    })
-    const ro = new ResizeObserver(() => aladin.current?.view?.fixLayoutDimensions?.())
+    }
+    A.init.then(() => { loaded = true; start() })
+    const ro = new ResizeObserver(() => { start(); aladin.current?.view?.fixLayoutDimensions?.() })
     if (viewRef.current) ro.observe(viewRef.current)
     return () => { dead = true; ro.disconnect() }
   }, [])
@@ -320,6 +331,23 @@ export default function App() {
       return A.source(ra, dec, { name: d === 0 ? `● ${date(t)} ${clockIn(tzOf(loc), t)}` : d % 5 === 0 ? date(t) : '' })
     }))
   }, [ready, target.obj, day, loc]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // the Moon and planets where they are at the viewed moment, seen from the site (the Moon's parallax is up to a degree)
+  useEffect(() => {
+    if (!ready) return
+    const [disc, labels] = solar.current
+    disc.removeAll(); labels.removeAll(); disc.reportChange?.()
+    const obs = new Astronomy.Observer(loc.lat, loc.lon, loc.elevation)
+    const m = Astronomy.Equator(Astronomy.Body.Moon, when, obs, false, true)
+    const sd = Math.asin(1737.4 / (m.dist * 149597870.7)) * (180 / Math.PI)
+    disc.add(A.circle(m.ra * 15, m.dec, sd, { color: 'rgba(229,231,235,0.9)', fillColor: 'rgba(229,231,235,0.12)' }))
+    const illum = Math.round(Astronomy.Illumination(Astronomy.Body.Moon, when).phase_fraction * 100)
+    const bodies = [Astronomy.Body.Mercury, Astronomy.Body.Venus, Astronomy.Body.Mars, Astronomy.Body.Jupiter, Astronomy.Body.Saturn, Astronomy.Body.Uranus, Astronomy.Body.Neptune]
+    labels.addSources([
+      A.source(m.ra * 15, m.dec + sd, { name: `Moon ${illum}%` }),
+      ...bodies.map((b) => { const e = Astronomy.Equator(b, when, obs, false, true); return A.source(e.ra * 15, e.dec, { name: b }) }),
+    ])
+  }, [ready, when, loc])
 
   const [conData, setConData] = useState<{ id: string; name: string; label: [number, number]; lines: [number, number][][] }[] | null>(null)
   const conLive = useRef<{ show: boolean; data: typeof conData }>({ show: false, data: null })
@@ -632,6 +660,23 @@ export default function App() {
     pick(o, fid)
   }, [view, p1, route.query, catalog, customs, ready]) // eslint-disable-line react-hooks/exhaustive-deps
 
+
+  /** Opens the sky at an event: the moment, centred on the pair, zoomed to show both. */
+  function showEvent(e: SkyEvent) {
+    const fov = Math.min(30, Math.max(e.span * 2, 1))
+    routed.current = ''
+    navigate(`/sky?at=${Math.round(e.t)}&ra=${e.ra.toFixed(4)}&dec=${e.dec.toFixed(4)}&fov=${fov.toFixed(2)}&label=${encodeURIComponent(e.title)}`)
+  }
+  // /sky?at=<ms>&ra&dec[&fov&label]: the sky at a moment, centred somewhere (events link here)
+  useEffect(() => {
+    if (view !== 'sky' || p1 || !ready) return
+    const q = route.query, at = Number(q.get('at')), ra = Number(q.get('ra')), dec = Number(q.get('dec'))
+    if (!at || !Number.isFinite(ra) || !Number.isFinite(dec) || routed.current === route.href) return
+    routed.current = route.href
+    setMoment(momentAt(tzOf(loc), at))
+    goTo({ ra, dec, label: q.get('label') ?? `${ra.toFixed(2)} ${dec.toFixed(2)}` }, false)
+    aladin.current?.setFoV(Number(q.get('fov')) || 2)
+  }, [view, p1, ready, route]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function goCoords() {
     const m = coordIn.trim().match(/^(-?\d+(?:\.\d+)?)[\s,]+(-?\d+(?:\.\d+)?)$/)
@@ -946,7 +991,7 @@ export default function App() {
       <header>
         <Link to="/tonight" className="brand"><img src="/favicon.svg" alt="" width={26} height={26} />Owl Astro</Link>
         <nav className="nav">{NAV.map(([id, to, name]) => <Link key={id} to={to} className={section === id ? 'on' : ''}>{name}{id === 'targets' && store.wishlist.length ? <small>{store.wishlist.length}</small> : null}</Link>)}</nav>
-        <span className="here">{view === 'browse' || view === 'comets' ? 'Targets' : view === 'sites' ? 'Sites' : view === 'gear' ? 'Gear' : view === 'inspector' ? 'Inspector' : view === 'settings' ? 'Settings' : NAV.find(([id]) => id === view)?.[2]}</span>
+        <span className="here">{view === 'browse' || view === 'comets' || view === 'events' ? 'Targets' : view === 'sites' ? 'Sites' : view === 'gear' ? 'Gear' : view === 'inspector' ? 'Inspector' : view === 'settings' ? 'Settings' : NAV.find(([id]) => id === view)?.[2]}</span>
         <span className="sp" />
         {!online && <span className="offline" title="No connection: planning works, forecasts, survey images and sync resume when you are back online">Offline</span>}
         <SiteSwitcher store={store} />
@@ -967,15 +1012,17 @@ export default function App() {
       )}
       {view === 'tonight' && <main className="pmain"><Tonight store={store} catalog={catalog} scope={defaultScope} onShow={show} onDetails={setDetail} onSky={() => navigate(skyPath)} onLog={setObs}
         night={p1} onNight={(n) => navigate(n ? `/tonight/${n}` : '/tonight', { replace: true })} /></main>}
-      {(view === 'targets' || view === 'browse' || view === 'comets') && (
+      {(view === 'targets' || view === 'browse' || view === 'comets' || view === 'events') && (
         <main className="pmain">
           <div className="subnav"><h2 className="th">Targets</h2>
             <Link to="/targets" className={view === 'targets' ? 'on' : ''}>Your targets{store.wishlist.length ? ` (${store.wishlist.length})` : ''}</Link>
             <Link to="/targets/browse" className={view === 'browse' ? 'on' : ''}>Browse catalogue</Link>
-            <Link to="/targets/comets" className={view === 'comets' ? 'on' : ''}>Comets</Link></div>
+            <Link to="/targets/comets" className={view === 'comets' ? 'on' : ''}>Comets</Link>
+            <Link to="/targets/events" className={view === 'events' ? 'on' : ''}>Events</Link></div>
           {view === 'targets'
             ? <Planner mode="wishlist" store={store} catalog={catalog} onShow={show} onDetails={setDetail} onLog={setObs} />
             : view === 'comets' ? <Comets store={store} onDetails={setDetail} onShow={show} />
+            : view === 'events' ? <Events store={store} catalog={catalog} scope={defaultScope} onShow={showEvent} />
             : <Catalogue key={route.query.get('con') ?? ''} con={route.query.get('con') ?? undefined} store={store} catalog={catalog} scope={defaultScope} onDetails={setDetail} onShow={show} />}
         </main>
       )}

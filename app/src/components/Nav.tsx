@@ -46,7 +46,7 @@ export function SiteSwitcher({ store }: { store: Store }) {
 
 /** The account's own pages, and the tools that are not about one account's data. */
 export const ACCOUNT: [string, string, string][] = [['/account', 'My account', 'Sign-in, sync, planning limits'], ['/account/gear', 'My gear', 'Your telescopes and cameras'], ['/account/sites', 'My sites', 'Light pollution, horizons, home']]
-export const TOOLS: [string, string, string][] = [['/tools/gear', 'Gear planner', 'Compare scopes and cameras'], ['/tools/inspector', 'Image inspector', 'Check stars and noise'], ['/tools/iso', 'Best ISO', 'Where a camera stops gaining']]
+export const TOOLS: [string, string, string][] = [['/tools/gear', 'Gear planner', 'Compare scopes and cameras'], ['/tools/inspector', 'Image inspector', 'Check stars and noise'], ['/tools/iso', 'Best ISO', 'Where a camera stops gaining'], ['/tools/gain', 'Best gain', 'For astro cameras, under your sky']]
 
 export function ToolsMenu({ active }: { active: boolean }) {
   return (

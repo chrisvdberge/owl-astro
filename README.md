@@ -48,6 +48,14 @@ dynamic range by Bill Claff ([PhotonsToPhotos](https://www.photonstophotos.net/C
 used for astrophotography, credited in the tool; `node app/scripts/build-iso.mjs` refreshes `app/src/lib/isodr.json`, and the
 knee detection is in `app/src/lib/iso.ts`.
 
+## Best gain
+
+Tools → Best gain (`/tools/gain/<camera>`) picks the gain for a cooled astro camera under your sky: each gain needs subs long enough
+for the sky background to reach 10× the read noise squared (read noise then adds ~5%); of the gains that get there within your
+longest sub, the one with the most dynamic range wins, else the high-conversion-gain switch. The sky rate comes from the exposure
+model (site Bortle, the camera's scope from My gear, filter, colour or mono). Read noise and full well per gain are approximated from
+the makers' charts in `app/src/lib/gain.ts`.
+
 ## Catalog
 
 `app/public/catalog.json` is generated: `node app/scripts/fetch-catalogs.mjs` downloads the extra catalogs into

@@ -379,3 +379,6 @@ header a.acctbtn.synced .sdot { background: var(--ok); } header a.acctbtn.syncin
 .isoc circle.on { fill: var(--acc); } .isoc circle.off { fill: var(--warn); } .isoc circle.nr { fill: none; stroke: var(--mute); stroke-width: 1.2; }
 .k.isod { background: var(--acc); height: 6px; border-radius: 3px; } .k.offd { background: var(--warn); height: 6px; border-radius: 3px; } .k.nowd { background: var(--warn); width: 2px; height: 10px; }
 .k.lined { background: repeating-linear-gradient(90deg, var(--mute) 0 4px, transparent 4px 7px); } .k.nrd { border: 1.2px solid var(--mute); width: 6px; height: 6px; border-radius: 50%; }
+.gtab { width: 100%; max-width: 760px; border-collapse: collapse; margin-top: 10px; font-size: 13px; } .gtab th { text-align: left; color: var(--mute); font-weight: 500; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+.gtab td { padding: 5px 8px; border-bottom: 1px solid var(--line); } .gtab tr.sel td { color: var(--acc); font-weight: 600; } .gtab td.bad { color: var(--warn); }
+.iso > p.note { margin: 0 0 10px; }

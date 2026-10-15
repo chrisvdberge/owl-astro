@@ -62,6 +62,20 @@ export interface ExposureEstimate {
   bgLimited: boolean                // the 'good' time is set by background smoothness, not by the target's brightness
 }
 
+/** Electrons per second per pixel from a surface brightness flux (photons / s / m² / arcsec²) through these optics. */
+function electronRate(optics: Optics) {
+  const area = Math.PI * (optics.apertureMm / 2000) ** 2           // m²
+  const px = compute(optics, 3).scale ** 2                         // arcsec² per pixel
+  return (flux: number) => flux * area * OPTICS * (optics.qe ?? 0.6) * px
+}
+
+/** The share of the sky's light a filter lets through: a dual-band filter, or a single 3–7 nm narrowband filter (one line, mono cameras). */
+export const SKY_PASS = { none: 1, dual: DUAL_SKY, narrow: 0.03 * 0.9 } as const
+
+/** Sky background in electrons per second per pixel under a Bortle class, with no moon. */
+export const skyRate = (optics: Optics, bortle: number, pass: number) =>
+  electronRate(optics)(F0 * 10 ** (-0.4 * SKY_MAG[Math.min(9, Math.max(1, Math.round(bortle)))]) * pass)
+
 /**
  * Rough integration time to reach a target signal-to-noise per pixel in the stack.
  * Photon shot noise from the object and the sky, plus read noise per sub; the sky is brightened by the moon (`moon` 0..1).
@@ -73,10 +87,7 @@ export function estimateExposure(o: CatObject, optics: Optics, bortle: number, s
   if (!sb && !isCluster) return null
   const skyMag = SKY_MAG[Math.min(9, Math.max(1, Math.round(bortle)))]
 
-  const r = compute(optics, 3)
-  const area = Math.PI * (optics.apertureMm / 2000) ** 2           // m²
-  const px = r.scale ** 2                                          // arcsec² per pixel
-  const rate = (flux: number) => flux * area * OPTICS * (optics.qe ?? 0.6) * px
+  const rate = electronRate(optics)
   const dual = filter === 'dual'
   const sky = rate(F0 * 10 ** (-0.4 * skyMag) * (dual ? DUAL_SKY : 1)) * (1 + moon * (dual ? 0.8 : 4))
   const rn = optics.readNoise ?? 2

@@ -344,7 +344,7 @@ header .acct { margin-left: 0; }
 .cfind .sky { fill: #12213d; } .cfind .figs path { stroke: rgba(148,163,184,.4); stroke-width: 1; fill: none; }
 .cfind .clab text { fill: rgba(148,163,184,.7); font-size: 11px; text-anchor: middle; }
 .cfind .ground { fill: #0b0f17; } .cfind .hz { fill: none; stroke: #f97316; stroke-width: 1.5; } .cfind .lim { fill: none; stroke: rgba(249,115,22,.6); stroke-dasharray: 5 4; }
-.cfind .path { fill: none; stroke: #a3e635; stroke-width: 1.5; stroke-dasharray: 3 3; } .cfind .hr circle { fill: #a3e635; } .cfind .hr text { fill: #d9f99d; font-size: 10.5px; }
+.cfind .path { fill: none; stroke: #a3e635; stroke-width: 1.5; stroke-dasharray: 3 3; } .cfind .hr circle { fill: #a3e635; } .cfind .hr circle.hit { fill: transparent; cursor: help; } .cfind .hr text { fill: #d9f99d; font-size: 10.5px; }
 .cfind .obj { fill: #ecfccb; stroke: #a3e635; stroke-width: 2; } .cfind .tail { stroke: #d9f99d; stroke-width: 3; stroke-linecap: round; opacity: .7; }
 .cfind .moon circle { fill: #e5e7eb; } .cfind .moon text { fill: #e5e7eb; font-size: 11px; }
 .cfind .tick line { stroke: var(--mute); } .cfind .tick text { fill: var(--mute); font-size: 11px; text-anchor: middle; }

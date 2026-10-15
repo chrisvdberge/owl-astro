@@ -4,12 +4,13 @@ import { tzOf, zonedEpoch } from './tz'
 export interface MonthPeak { month: number; year: number; alt: number }
 
 /** Highest altitude the target reaches in each of the next 12 months, on the 15th, while the sun is below −12° and above the local horizon. */
-export function monthlyPeaks(loc: Location, ra: number, dec: number, from: Date): MonthPeak[] {
+export function monthlyPeaks(loc: Location, ra: number, dec: number, from: Date, track?: (t: Date) => [number, number]): MonthPeak[] {
   const tz = tzOf(loc)
   return Array.from({ length: 12 }, (_, k) => {
     const d = new Date(from.getFullYear(), from.getMonth() + k, 15)
     const t0 = zonedEpoch(tz, d.getFullYear(), d.getMonth() + 1, 15, 17)
     let alt = 0
+    if (track) [ra, dec] = track(new Date(t0 + 7 * 3600000))
     for (let m = 0; m <= 15 * 60; m += 30) {
       const t = new Date(t0 + m * 60000)
       if (sunAlt(loc, t) >= -12) continue

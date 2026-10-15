@@ -22,6 +22,15 @@ no network. Changes made offline sync when the connection returns. A new deploy 
 Icons are generated from `app/public/favicon.svg` with `npm run icons`. It has no effect in `npm run dev`; try it with
 `npm run build && npx vite preview`.
 
+## Comets
+
+Targets → Comets lists the comets brighter than a chosen magnitude. Orbits come from the Minor Planet Center's
+`CometEls.txt` (fetched by the browser, cached a day); positions are two-body orbits computed in `app/src/lib/comets.ts`.
+Brightness is the latest observed magnitude from [COBS](https://cobs.si), which has no CORS headers: in production
+the worker in `app/worker/index.js` proxies it at `/api/cobs/comets` (cached 6 h); `npm run dev` proxies it through Vite.
+A comet added as a target keeps its elements, moves night by night in all planning, gets a finder chart from your site
+in its details, and its path over the coming weeks on the sky view.
+
 ## Catalog
 
 `app/public/catalog.json` is generated: `node app/scripts/fetch-catalogs.mjs` downloads the extra catalogs into

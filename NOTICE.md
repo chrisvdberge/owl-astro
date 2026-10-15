@@ -21,3 +21,6 @@ by Olaf Frohn, BSD 3-Clause licence.
 Light-pollution figures and map tiles on the Site view are read directly from David J. Lorenz's
 [Light Pollution Atlas](https://djlorenz.github.io/astronomy/lp/) (2025 edition, VIIRS data from the Earth Observation Group,
 Colorado School of Mines). Base map © Esri (World Dark Gray Canvas); town names from OpenStreetMap Nominatim.
+
+Comet orbital elements come from the IAU [Minor Planet Center](https://www.minorplanetcenter.net/) (CometEls.txt);
+observed comet magnitudes from [COBS](https://cobs.si), the Comet Observation database (Črni Vrh Observatory).

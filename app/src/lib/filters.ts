@@ -1,6 +1,7 @@
 /** Rough, general guidance by object type (not specific to a filter wheel). */
 export function filterAdvice(type: string) {
   if (['HII', 'EmN', 'SNR', 'Neb', 'Cl+N'].includes(type)) return { color: 'Ha or dual narrowband', mono: 'Ha + OIII (+ SII)', seestar: 'Dual-band (LP) filter on' }
+  if (type === 'Comet') return { color: 'Broadband, UV/IR cut; short subs (it moves)', mono: 'L + RGB, stacked on the comet and on the stars', seestar: 'No filter' }
   if (type === 'PN') return { color: 'OIII / dual narrowband', mono: 'OIII + Ha', seestar: 'Dual-band (LP) filter on' }
   if (type === 'RfN') return { color: 'Broadband, UV/IR cut', mono: 'L + RGB', seestar: 'No filter' }
   if (type === 'DrkN') return { color: 'Broadband, long integration', mono: 'L + RGB', seestar: 'No filter' }

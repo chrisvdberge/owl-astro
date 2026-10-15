@@ -1,5 +1,7 @@
 import { useMemo } from 'react'
-import { catalogTag, isCustom, sexa, type CatObject } from '../lib/catalog'
+import { catalogTag, extraOf, isCustom, sexa, type CatObject } from '../lib/catalog'
+import { cometPos } from '../lib/comets'
+import CometFinder from './CometFinder'
 import type { useStore, Priority } from '../lib/store'
 import { sampleNight, targetAltAz } from '../lib/astro'
 import { compute, framingFit } from '../lib/optics'
@@ -34,12 +36,12 @@ export default function TargetDetail({ o, store, scope, onClose, onShow, onPlann
   const night = useMemo(() => nightNow(tz), [tz])
   const samples = useMemo(() => {
     const [y, m, d] = night.night.split('-').map(Number)
-    return sampleNight(loc, o.ra, o.dec, new Date(y, m - 1, d), 10, minAlt)
-  }, [loc, o.ra, o.dec, night.night, minAlt])
+    return sampleNight(loc, o.ra, o.dec, new Date(y, m - 1, d), 10, minAlt, o.track)
+  }, [loc, o.ra, o.dec, o.track, night.night, minAlt])
   const now = targetAltAz(loc, o.ra, o.dec, new Date())
   const dark = samples.filter((s) => s.sun < -12)
   const peak = dark.length ? dark.reduce((a, b) => (b.alt > a.alt ? b : a)) : null
-  const peaks = useMemo(() => monthlyPeaks(loc, o.ra, o.dec, new Date()), [loc, o.ra, o.dec])
+  const peaks = useMemo(() => monthlyPeaks(loc, o.ra, o.dec, new Date(), o.track), [loc, o.ra, o.dec, o.track])
   const best = bestMonths(peaks, minAlt)
   const top = Math.max(60, ...peaks.map((p) => p.alt))
   const advice = filterAdvice(o.type)
@@ -78,8 +80,19 @@ export default function TargetDetail({ o, store, scope, onClose, onShow, onPlann
           </section>
         )}
 
+        {o.comet && (() => {
+          const p = cometPos(o.comet.el, new Date())
+          return (
+            <section className="card">
+              <div className="ch"><h3>Where to find it tonight <small>from {loc.name}</small></h3><span className="sp" />
+                <small className="note">mag {(p.mag + (o.comet.dm ?? 0)).toFixed(1)}{o.comet.dm == null ? ' (predicted)' : ''} · {p.delta.toFixed(2)} AU from Earth · {p.r.toFixed(2)} AU from the sun · perihelion {new Date(o.comet.el.tp).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</small></div>
+              <CometFinder key={`${o.id}|${night.night}|${loc.id}`} o={o} loc={loc} settings={settings} night={night.night} />
+            </section>
+          )
+        })()}
+
         <FramingPreview o={o} wish={wish} scope={scope} onSave={(data, thumb) => {
-          store.addWish(o.id, { status: 'wishlist', custom: isCustom(o.id) ? { name: o.names[0], ra: o.ra, dec: o.dec, con: o.con } : undefined })
+          store.addWish(o.id, { status: 'wishlist', ...extraOf(o) })
           store.addFraming(o.id, { ...data, id: crypto.randomUUID(), name: `Framing ${(wish?.framings?.length ?? 0) + 1}`, created: new Date().toISOString().slice(0, 10), thumb })
         }} />
 
@@ -118,8 +131,8 @@ export default function TargetDetail({ o, store, scope, onClose, onShow, onPlann
         {wish && <textarea className="notes" rows={2} placeholder="Notes" value={wish.notes} onChange={(e) => store.patchWish(o.id, { notes: e.target.value })} />}
 
         <footer className="df">
-          {wish ? <button className="pri" onClick={onPlanner}>☆ Open in your targets</button> : <button className="pri" onClick={() => store.addWish(o.id, { status: 'progress' })}>＋ Add to planner</button>}
-          {!wish && <button onClick={() => store.addWish(o.id)}>☆ Add to wishlist</button>}
+          {wish ? <button className="pri" onClick={onPlanner}>☆ Open in your targets</button> : <button className="pri" onClick={() => store.addWish(o.id, { status: 'progress', ...extraOf(o) })}>＋ Add to planner</button>}
+          {!wish && <button onClick={() => store.addWish(o.id, extraOf(o))}>☆ Add to wishlist</button>}
           <button onClick={() => onShow(wish?.framings?.[0]?.id)}>▭ Framing &amp; Mosaic</button>
           <button onClick={onLog}>＋ Log observation</button>
           <span className="sp" />

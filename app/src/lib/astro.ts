@@ -70,6 +70,7 @@ function bodyAltAz(l: Location, body: Astronomy.Body, t: Date) {
 
 export const sunAlt = (l: Location, t: Date) => bodyAltAz(l, Astronomy.Body.Sun, t).alt
 export const moonAltAz = (l: Location, t: Date) => bodyAltAz(l, Astronomy.Body.Moon, t)
+export const sunAltAz = (l: Location, t: Date) => bodyAltAz(l, Astronomy.Body.Sun, t)
 
 /**
  * Parallactic angle (deg, -180..180): position angle, east of north, of the direction to the zenith at an object.
@@ -111,13 +112,13 @@ export function separation(ra1: number, dec1: number, ra2: number, dec2: number)
 
 export interface NightSample { t: Date; alt: number; az: number; sun: number; moon: number; usable: boolean }
 
-/** Samples a night from 17:00 site time on `day` (its y/m/d fields) to 08:00 the next day, every `stepMin` minutes. */
-export function sampleNight(l: Location, ra: number, dec: number, day: Date, stepMin = 10, minAlt = 25): NightSample[] {
+/** Samples a night from 17:00 site time on `day` (its y/m/d fields) to 08:00 the next day, every `stepMin` minutes; `track` moves the target (comets). */
+export function sampleNight(l: Location, ra: number, dec: number, day: Date, stepMin = 10, minAlt = 25, track?: (t: Date) => [number, number]): NightSample[] {
   const start = new Date(zonedEpoch(tzOf(l), day.getFullYear(), day.getMonth() + 1, day.getDate(), 17))
   const out: NightSample[] = []
   for (let m = 0; m <= 15 * 60; m += stepMin) {
     const t = new Date(start.getTime() + m * 60000)
-    const { alt, az } = targetAltAz(l, ra, dec, t)
+    const { alt, az } = track ? targetAltAz(l, ...track(t), t) : targetAltAz(l, ra, dec, t)
     const sun = sunAlt(l, t)
     const moon = moonAltAz(l, t).alt
     const usable = sun < -12 && alt >= limitAlt(l, az, minAlt)

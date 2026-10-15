@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import * as Astronomy from 'astronomy-engine'
-import { customObject, isCustom, searchCatalog, type CatObject } from '../lib/catalog'
+import { extraObject, isCustom, searchCatalog, type CatObject } from '../lib/catalog'
 import { targetAltAz } from '../lib/astro'
 import { compute, framingFit } from '../lib/optics'
 import { clockIn, nightNow, tzOf } from '../lib/tz'
@@ -63,7 +63,7 @@ export default function Tonight({ store, catalog, scope, onShow, onDetails, onSk
   const wishById = useMemo(() => new Map(wishlist.map((w) => [w.id, w])), [wishlist])
   const lookup = (id: string): CatObject | undefined => {
     const w = wishById.get(id)
-    return byId.get(id) ?? (w?.custom ? customObject(w.id, w.custom) : undefined)
+    return byId.get(id) ?? (w ? extraObject(w) : undefined)
   }
   const fov = useMemo(() => compute(scope.optics, 3), [scope])
   const now = Date.now()

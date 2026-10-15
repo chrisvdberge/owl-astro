@@ -331,3 +331,21 @@ header .acct { margin-left: 0; }
 }
 /* Leaflet stacks its panes and controls up to z-index 1000: keep that inside the map so menus and dialogs stay on top */
 .smapel { position: relative; z-index: 0; isolation: isolate; }
+/* comets: list and finder chart */
+.ctab { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.ctab table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.ctab th, .ctab td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; white-space: nowrap; }
+.ctab th { font-weight: 600; color: var(--mute); font-size: 12px; } .ctab tr:last-child td { border-bottom: 0; }
+.ctab td small { display: block; color: var(--mute); font-size: 11px; } .ctab td b + small { display: inline; }
+.ctab td.up { color: var(--ok); } .ctab td.down { color: var(--mute); }
+.ctab .title { background: none; border: 0; padding: 0; color: inherit; cursor: pointer; } .ctab .acts { text-align: right; } .ctab .acts button { margin-left: 4px; }
+.comets > .note { margin-top: 10px; }
+.cfind svg { width: 100%; display: block; border-radius: 8px; background: #050912; }
+.cfind .sky { fill: #12213d; } .cfind .figs path { stroke: rgba(148,163,184,.4); stroke-width: 1; fill: none; }
+.cfind .clab text { fill: rgba(148,163,184,.7); font-size: 11px; text-anchor: middle; }
+.cfind .ground { fill: #0b0f17; } .cfind .hz { fill: none; stroke: #f97316; stroke-width: 1.5; } .cfind .lim { fill: none; stroke: rgba(249,115,22,.6); stroke-dasharray: 5 4; }
+.cfind .path { fill: none; stroke: #a3e635; stroke-width: 1.5; stroke-dasharray: 3 3; } .cfind .hr circle { fill: #a3e635; } .cfind .hr text { fill: #d9f99d; font-size: 10.5px; }
+.cfind .obj { fill: #ecfccb; stroke: #a3e635; stroke-width: 2; } .cfind .tail { stroke: #d9f99d; stroke-width: 3; stroke-linecap: round; opacity: .7; }
+.cfind .moon circle { fill: #e5e7eb; } .cfind .moon text { fill: #e5e7eb; font-size: 11px; }
+.cfind .tick line { stroke: var(--mute); } .cfind .tick text { fill: var(--mute); font-size: 11px; text-anchor: middle; }
+.cfind input[type=range] { width: 100%; margin: 8px 0 2px; }

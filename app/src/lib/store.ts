@@ -3,6 +3,7 @@ import { EMPTY, diff, pull, push, supabase, type Op } from './sync'
 import type { Location } from './astro'
 import type { Optics } from './optics'
 import type { CustomTarget } from './catalog'
+import type { CometTarget } from './comets'
 import { DEFAULT_SETTINGS, type MoonTolerance, type Settings } from './suitability'
 
 export type Status = 'wishlist' | 'progress' | 'done'
@@ -22,7 +23,7 @@ export interface Framing extends FrameData { id: string; name: string; created: 
 export interface PlanBlock { id: string; date: string; targetId: string; start: number; end: number }
 /** One imaging session on a target. `hours` is the integration time; `frames` × `exposure` (s) is optional detail; `setup` names the telescope + camera used. */
 export interface Session { id: string; date: string; hours: number; note: string; setup?: string; frames?: number; exposure?: number }
-export interface WishItem { id: string; status: Status; goalHours?: number; notes: string; moon?: MoonTolerance; priority?: Priority; added: string; sessions?: Session[]; framings?: Framing[]; custom?: CustomTarget }
+export interface WishItem { id: string; status: Status; goalHours?: number; notes: string; moon?: MoonTolerance; priority?: Priority; added: string; sessions?: Session[]; framings?: Framing[]; custom?: CustomTarget; comet?: CometTarget }
 
 /** Older saves kept one `framing` + `thumb` on the wish itself; fold them into the framings list. */
 export function upgradeWish(w: WishItem & { framing?: FrameData; thumb?: string }): WishItem {
@@ -152,12 +153,12 @@ export function useStore(userId: string | null) {
     settings: state.settings,
     setSettings: (patch: Partial<Settings>) => update((s) => ({ ...s, settings: { ...s.settings, ...patch } })),
     /** Adds a target, or (when already listed) refreshes its framing/snapshot; 'progress' promotes it to the planner. */
-    addWish: (id: string, opts: { status?: Status; custom?: CustomTarget } = {}) =>
+    addWish: (id: string, opts: { status?: Status; custom?: CustomTarget; comet?: CometTarget } = {}) =>
       update((s) => {
-        const { status = 'wishlist', custom } = opts
+        const { status = 'wishlist', custom, comet } = opts
         if (s.wishlist.some((w) => w.id === id))
           return { ...s, wishlist: s.wishlist.map((w) => (w.id !== id ? w : { ...w, status: status === 'progress' && w.status === 'wishlist' ? 'progress' : w.status })) }
-        return { ...s, wishlist: [...s.wishlist, { id, status, notes: '', added: new Date().toISOString().slice(0, 10), custom }] }
+        return { ...s, wishlist: [...s.wishlist, { id, status, notes: '', added: new Date().toISOString().slice(0, 10), custom, comet }] }
       }),
     addFraming: (id: string, f: Framing) =>
       update((s) => ({ ...s, wishlist: s.wishlist.map((w) => (w.id === id ? { ...w, framings: [...(w.framings ?? []), f] } : w)) })),

@@ -371,3 +371,11 @@ header a.acctbtn svg { fill: none; stroke: currentColor; stroke-width: 1.8; stro
 header a.acctbtn.in { padding: 4px; }
 header a.acctbtn .sdot { position: absolute; right: 0; bottom: 0; width: 8px; height: 8px; border-radius: 50%; border: 2px solid var(--bg); background: var(--mute); }
 header a.acctbtn.synced .sdot { background: var(--ok); } header a.acctbtn.syncing .sdot { background: var(--warn); } header a.acctbtn.error .sdot { background: var(--bad); }
+/* best ISO */
+.iso .row { margin: 6px 0 12px; } .iso select { min-width: 220px; } .iso .chip { background: none; cursor: pointer; } .iso .chip.on { border-color: var(--acc); background: rgba(56,189,248,.1); }
+.iso .card.note p { margin: 0 0 8px; line-height: 1.55; } .iso .card.note p:last-child { margin: 0; } .iso a { color: var(--acc); }
+.isoc { max-width: 760px; display: block; }
+.isoc .isol { stroke: var(--mute); stroke-width: 1.2; stroke-dasharray: 5 4; } .isoc .isocurve { fill: none; stroke: var(--acc); stroke-width: 1.5; opacity: .55; }
+.isoc circle.on { fill: var(--acc); } .isoc circle.off { fill: var(--warn); } .isoc circle.nr { fill: none; stroke: var(--mute); stroke-width: 1.2; }
+.k.isod { background: var(--acc); height: 6px; border-radius: 3px; } .k.offd { background: var(--warn); height: 6px; border-radius: 3px; } .k.nowd { background: var(--warn); width: 2px; height: 10px; }
+.k.lined { background: repeating-linear-gradient(90deg, var(--mute) 0 4px, transparent 4px 7px); } .k.nrd { border: 1.2px solid var(--mute); width: 6px; height: 6px; border-radius: 50%; }

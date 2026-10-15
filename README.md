@@ -40,6 +40,14 @@ each other, comets passing deep-sky objects, and lunar/solar eclipses. "Show on 
 (`/sky?at=<ms>&ra&dec&fov`), which draws the Moon and planets where they are. Bright stars (V < 4.5) come from SIMBAD
 via `app/scripts/build-stars.mjs` into `app/public/stars.json`.
 
+## Best ISO
+
+Tools → Best ISO (`/tools/iso/<camera>`) gives the lowest ISO worth using for a photo camera: the point where dynamic range,
+plotted against log ISO, joins the straight line of −1 stop per stop (read noise no longer matters). Data is the photographic
+dynamic range by Bill Claff ([PhotonsToPhotos](https://www.photonstophotos.net/Charts/PDR.htm)) for a curated list of cameras
+used for astrophotography, credited in the tool; `node app/scripts/build-iso.mjs` refreshes `app/src/lib/isodr.json`, and the
+knee detection is in `app/src/lib/iso.ts`.
+
 ## Catalog
 
 `app/public/catalog.json` is generated: `node app/scripts/fetch-catalogs.mjs` downloads the extra catalogs into

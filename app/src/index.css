@@ -382,3 +382,7 @@ header a.acctbtn.synced .sdot { background: var(--ok); } header a.acctbtn.syncin
 .gtab { width: 100%; max-width: 760px; border-collapse: collapse; margin-top: 10px; font-size: 13px; } .gtab th { text-align: left; color: var(--mute); font-weight: 500; padding: 4px 8px; border-bottom: 1px solid var(--line); }
 .gtab td { padding: 5px 8px; border-bottom: 1px solid var(--line); } .gtab tr.sel td { color: var(--acc); font-weight: 600; } .gtab td.bad { color: var(--warn); }
 .iso > p.note { margin: 0 0 10px; }
+/* moderating comments on the guides */
+.gcl > li { border-top: 1px solid var(--line); padding: 10px 0; } .gcl > li:first-child { border-top: 0; }
+.gcb { white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0 8px; }
+.gcr textarea { width: 100%; box-sizing: border-box; margin: 8px 0 6px; font: inherit; }

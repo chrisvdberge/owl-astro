@@ -78,6 +78,7 @@ export default function App() {
   const [menu, setMenu] = useState<{ x: number; y: number; ra: number; dec: number } | null>(null)
   const [hover, setHover] = useState<{ o: CatObject; x: number; y: number } | null>(null) // object under the cursor
   const [picked, setPicked] = useState<{ o: CatObject; x: number; y: number } | null>(null) // object clicked on the sky
+  const [pickedCon, setPickedCon] = useState<{ id: string; name: string; x: number; y: number } | null>(null) // constellation clicked on the sky
   const [markTip, setMarkTip] = useState<{ t: number; mag?: number; x: number; y: number } | null>(null) // a comet path dot under the cursor
   const [toast, setToast] = useState('')
   const [coordIn, setCoordIn] = useState('')
@@ -100,7 +101,7 @@ export default function App() {
   const section = view === 'browse' || view === 'comets' ? 'targets' : ['gear', 'sites', 'inspector', 'settings'].includes(view) ? 'setup' : view
   // the bare address opens on Tonight once there is something to plan, otherwise on the sky
   useEffect(() => { if (!p0) navigate(store.wishlist.some((w) => w.status !== 'done') ? '/tonight' : '/sky', { replace: true }) }, [p0]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (view !== 'sky') { setFrameSel(false); setMenu(null); setHover(null); setPicked(null); setMarkTip(null) } }, [view])
+  useEffect(() => { if (view !== 'sky') { setFrameSel(false); setMenu(null); setHover(null); setPicked(null); setPickedCon(null); setMarkTip(null) } }, [view])
   const skyPath = target.obj ? `/sky/${encodeURIComponent(slugOf(target.obj))}` : '/sky'
   const NAV: [string, string, string, string][] = [['tonight', '/tonight', 'Tonight', '☾'], ['sky', skyPath, 'Sky', '✦'], ['targets', '/targets', 'Targets', '☆'], ['plan', '/plan', 'Plan', '▦'], ['log', '/log', 'Log', '✎']]
   const goView = (v: 'sites') => navigate(`/setup/${v}`)
@@ -320,7 +321,9 @@ export default function App() {
     }))
   }, [ready, target.obj, day, loc]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [conData, setConData] = useState<{ name: string; label: [number, number]; lines: [number, number][][] }[] | null>(null)
+  const [conData, setConData] = useState<{ id: string; name: string; label: [number, number]; lines: [number, number][][] }[] | null>(null)
+  const conLive = useRef<{ show: boolean; data: typeof conData }>({ show: false, data: null })
+  useEffect(() => { conLive.current = { show: showCon, data: conData } }, [showCon, conData])
   useEffect(() => { if (showCon && !conData) fetch('/constellations.json').then((r) => r.json()).then(setConData).catch(() => {}) }, [showCon, conData])
   useEffect(() => {
     if (!ready || !conData) return
@@ -429,6 +432,31 @@ export default function App() {
       } catch { return null }
       return result
     }
+    /** Constellation whose stick figure (or name) is within a few px of a view position, when the figures are shown. */
+    const conUnder = (x: number, y: number) => {
+      const { show, data } = conLive.current
+      if (!show || !data) return undefined
+      const pix = (p: [number, number]): [number, number] | undefined => { try { return aladin.current?.world2pix?.(p[0], p[1]) ?? undefined } catch { return undefined } }
+      let best: (typeof data)[number] | undefined, bestD = 5
+      for (const c of data) {
+        const lab = pix(c.label)
+        if (lab && Math.hypot(lab[0] - x, lab[1] - y) < 14) return c
+        for (const l of c.lines) {
+          let a = pix(l[0])
+          for (let i = 1; i < l.length; i++) {
+            const b = pix(l[i])
+            if (a && b) {
+              const dx = b[0] - a[0], dy = b[1] - a[1], len = dx * dx + dy * dy
+              const t = len ? Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / len)) : 0
+              const d = Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy)
+              if (d < bestD && len < 4e6) { bestD = d; best = c } // skip segments torn across the projection edge
+            }
+            a = b
+          }
+        }
+      }
+      return best
+    }
     /** A dot on the comet's path within a few px of a view position. */
     const markUnder = (x: number, y: number) => {
       let best, bestD = 8
@@ -470,7 +498,7 @@ export default function App() {
       down = { x, y }; moved = false
       const h = hit(x, y)
       // a selected frame drags from anywhere on it; grabbing the outline of an unselected one selects and drags it in one go
-      setHover(null); setPicked(null); setMarkTip(null)
+      setHover(null); setPicked(null); setPickedCon(null); setMarkTip(null)
       if (h && (live.current.sel || h === 'edge')) {
         if (!live.current.sel) { live.current.sel = true; setFrameSel(true) }
         try {
@@ -512,16 +540,19 @@ export default function App() {
       if (!moved && !wasDrag) {
         const [x, y] = local(e)
         const h = hit(x, y)
-        const o = h !== 'edge' ? objectUnder(x, y) : undefined
+        // a constellation line or name wins over the objects behind it; then catalog objects
+        const c = h !== 'edge' ? conUnder(x, y) : undefined
+        const o = h !== 'edge' && !c ? objectUnder(x, y) : undefined
+        if (c) { setPickedCon({ id: c.id, name: c.name, x: e.clientX, y: e.clientY }); setHover(null) }
         if (o) { setPicked({ o, x: e.clientX, y: e.clientY }); setHover(null) }
-        if (!o || !h) setFrameSel(h !== null) // clicking an object inside the frame identifies it rather than selecting the frame
+        if (!(o || c) || !h) setFrameSel(h !== null) // clicking an object inside the frame identifies it rather than selecting the frame
       }
       grab = null; down = null
       el.classList.remove('dragging')
     }
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setFrameSel(false); setPicked(null) } }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setFrameSel(false); setPicked(null); setPickedCon(null) } }
     const onLeave = () => { cancelAnimationFrame(hoverFrame); setHover(null); setMarkTip(null) }
-    const onWheel = () => { setHover(null); setPicked(null); setMarkTip(null) }
+    const onWheel = () => { setHover(null); setPicked(null); setPickedCon(null); setMarkTip(null) }
     const stoppers = ['mousedown', 'touchstart', 'mousemove', 'touchmove'] as const
     el.addEventListener('pointerdown', onDown, true)
     for (const t of stoppers) el.addEventListener(t, block, true)
@@ -945,7 +976,7 @@ export default function App() {
           {view === 'targets'
             ? <Planner mode="wishlist" store={store} catalog={catalog} onShow={show} onDetails={setDetail} onLog={setObs} />
             : view === 'comets' ? <Comets store={store} onDetails={setDetail} onShow={show} />
-            : <Catalogue store={store} catalog={catalog} scope={defaultScope} onDetails={setDetail} onShow={show} />}
+            : <Catalogue key={route.query.get('con') ?? ''} con={route.query.get('con') ?? undefined} store={store} catalog={catalog} scope={defaultScope} onDetails={setDetail} onShow={show} />}
         </main>
       )}
       {view === 'plan' && <main className="pmain"><div className="subnav"><h2 className="th">Plan <small>the year ahead for your targets</small></h2></div><Planner mode="calendar" store={store} catalog={catalog} onShow={show} onDetails={setDetail} onLog={setObs} /></main>}
@@ -983,8 +1014,8 @@ export default function App() {
       })()}
       {markTip && target.obj && !picked && !menu && (
         <div className="skytip" style={{ left: Math.min(markTip.x + 14, window.innerWidth - 260), top: markTip.y + 16 }}>
-          <b>{nameOf(target.obj)}</b> · {new Date(markTip.t).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })} {clockIn(tzOf(loc), markTip.t)}
-          <small>{markTip.mag != null ? `mag ${markTip.mag.toFixed(1)}${target.obj.comet?.dm == null ? ' (predicted)' : ''}` : 'brightness unknown'}</small>
+          <b className="tipmag">{markTip.mag != null ? `mag ${markTip.mag.toFixed(1)}` : 'mag ?'}</b>
+          <small>{new Date(markTip.t).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })} {clockIn(tzOf(loc), markTip.t)}{markTip.mag != null && target.obj.comet?.dm == null ? ' · predicted' : ''}</small>
         </div>
       )}
       {hover && !picked && !menu && (
@@ -1001,6 +1032,16 @@ export default function App() {
           <button onClick={() => { setFrame({ ra: picked.o.ra, dec: picked.o.dec }); setPicked(null) }}>⌖ Centre frame on it</button>
         </div>
       )}
+      {pickedCon && !menu && (() => {
+        const n = catalog.filter((o) => o.con === pickedCon.id).length
+        return (
+          <div className="ctx" style={{ left: Math.min(pickedCon.x, window.innerWidth - 250), top: Math.min(pickedCon.y, window.innerHeight - 120) }}>
+            <b>{pickedCon.name}</b>
+            <small>Constellation · {n.toLocaleString()} catalogued objects</small>
+            <button onClick={() => { setPickedCon(null); navigate(`/targets/browse?con=${encodeURIComponent(pickedCon.id)}`) }}>☰ Browse targets in {pickedCon.name}</button>
+          </div>
+        )
+      })()}
       {menu && <div className="ctxbg" onMouseDown={() => setMenu(null)} onContextMenu={(e) => { e.preventDefault(); setMenu(null) }} />}
       {detail && (
         <TargetDetail o={detail} store={store} scope={defaultScope} onClose={() => setDetail(null)}

@@ -1,5 +1,6 @@
 // Converts OpenNGC CSVs (../data) into public/catalog.json (Messier + NGC/IC).
 import { readFileSync, writeFileSync } from 'node:fs'
+import * as Astronomy from 'astronomy-engine'
 
 const dir = new URL('../../data/', import.meta.url)
 const TYPES = {
@@ -36,7 +37,7 @@ for (const f of ['NGC.csv', 'addendum.csv']) {
       typeName: TYPES[c.Type] ?? c.Type,
       ra: +hms(c.RA).toFixed(5),
       dec: +dms(c.Dec).toFixed(5),
-      con: c.Const,
+      con: c.Const === 'Se1' || c.Const === 'Se2' ? 'Ser' : c.Const, // OpenNGC splits Serpens; one constellation, as on the sky
       maj: num(c.MajAx), min: num(c.MinAx), pa: num(c.PosAng),
       mag: num(c['V-Mag']) ?? num(c['B-Mag']),
       sb: num(c.SurfBr),
@@ -81,7 +82,7 @@ function b1900ToJ2000(raDeg, decDeg) {
 }
 
 const mk = (id, type, ra, dec, maj, min = maj, extra = {}) => ({
-  id, m: null, type, typeName: TYPES[type] ?? type, ra: r5(ra), dec: r5(dec), con: '',
+  id, m: null, type, typeName: TYPES[type] ?? type, ra: r5(ra), dec: r5(dec), con: Astronomy.Constellation(ra / 15, dec).symbol,
   maj: maj ? +maj.toFixed(1) : null, min: min ? +min.toFixed(1) : null, pa: null, mag: null, sb: null, names: [], alt: [], ...extra,
 })
 

@@ -35,15 +35,15 @@ const pctFill = (f: number) => (f >= 1 ? '100%' : f < 0.01 ? '<1%' : `${Math.rou
 const natural = (a: string, b: string) => a.localeCompare(b, 'en', { numeric: true })
 
 /** The catalogue as a grid of information cards: filter, sort, star, open details. */
-export default function Catalogue({ store, catalog, scope, onDetails, onShow }: {
-  store: Store; catalog: CatObject[]; scope: Scope
+export default function Catalogue({ store, catalog, scope, con: startCon, onDetails, onShow }: {
+  store: Store; catalog: CatObject[]; scope: Scope; con?: string // `con`: open on one constellation (all catalogues)
   onDetails: (o: CatObject) => void; onShow: (o: CatObject, fid?: string) => void
 }) {
   const { active: loc, settings, wishlist } = store
   const tz = tzOf(loc)
-  const [cat, setCat] = useState('messier')
+  const [cat, setCat] = useState(startCon ? 'all' : 'messier')
   const [group, setGroup] = useState('deep')
-  const [con, setCon] = useState('')
+  const [con, setCon] = useState(startCon ?? '')
   const [mag, setMag] = useState(99)
   const [size, setSize] = useState(0)
   const [fill, setFill] = useState(0)

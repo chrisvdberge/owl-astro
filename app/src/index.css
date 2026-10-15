@@ -315,7 +315,7 @@ header .acct { margin-left: 0; }
 .skytgt { grid-row: 2; grid-column: 2; align-self: start; justify-self: center; z-index: 5; margin-top: 46px; pointer-events: none; font-size: 12.5px; color: var(--fg); background: rgba(11,15,23,.78); border: 1px solid var(--line); border-radius: 14px; padding: 3px 12px; white-space: nowrap; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis; }
 .tabbar, .msheet { display: none; }
 @media (max-width: 900px) {
-  header .nav, header .setupm, header .acctslot { display: none; } header .here { display: inline-flex; } header .brand { font-size: 0; gap: 0; margin: 0; }
+  header .nav, header .setupm { display: none; } header a.acctbtn span { display: none; } header a.acctbtn { padding: 4px; } header .here { display: inline-flex; } header .brand { font-size: 0; gap: 0; margin: 0; }
   .view, .skytgt { grid-column: 1; }
   .sitesw .sname { max-width: 130px; }
   .tabbar { display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; z-index: 50; left: 0; right: 0; bottom: 0; background: var(--panel); border-top: 1px solid var(--line); padding: 4px max(4px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(4px, env(safe-area-inset-left)); }
@@ -364,3 +364,10 @@ header .acct { margin-left: 0; }
 .gdef { color: var(--warn); } ul.plain { list-style: none; padding: 0; margin: 6px 0; } ul.plain li { padding: 3px 0; }
 .mygear > .note { max-width: 760px; }
 header a.acct { text-decoration: none; color: inherit; border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; }
+/* header account button: person icon, sync dot */
+header a.acctbtn { position: relative; display: inline-flex; align-items: center; gap: 6px; color: var(--fg); text-decoration: none; border: 1px solid var(--line); border-radius: 999px; padding: 4px 8px; font-size: 12.5px; }
+header a.acctbtn:hover { border-color: var(--acc); }
+header a.acctbtn svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+header a.acctbtn.in { padding: 4px; }
+header a.acctbtn .sdot { position: absolute; right: 0; bottom: 0; width: 8px; height: 8px; border-radius: 50%; border: 2px solid var(--bg); background: var(--mute); }
+header a.acctbtn.synced .sdot { background: var(--ok); } header a.acctbtn.syncing .sdot { background: var(--warn); } header a.acctbtn.error .sdot { background: var(--bad); }

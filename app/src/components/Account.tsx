@@ -6,11 +6,15 @@ import type { SyncStatus } from '../lib/store'
 const LABEL: Record<SyncStatus, string> = { local: 'Local only', syncing: 'Saving…', synced: 'Synced', error: 'Sync error' }
 type Auth = ReturnType<typeof useAuth>
 
-/** Header link to the account page: "Sign in", or the sync status once signed in. */
-export function AccountButton({ auth, status, className = 'acct' }: { auth: Auth; status: SyncStatus; className?: string }) {
+/** Header link to the account page: a person icon (a dot shows the sync state when signed in), "Sign in" when not. */
+export function AccountButton({ auth, status }: { auth: Auth; status: SyncStatus }) {
+  const signedIn = !!auth.user
   return (
-    <Link to="/account" className={`${className} ${auth.user ? status : ''}`} title={auth.user?.email ?? 'Sign in or create an account'}>
-      {!auth.enabled ? 'Account' : auth.user ? `● ${LABEL[status]}` : 'Sign in'}
+    <Link to="/account" className={`acctbtn ${signedIn ? `in ${status}` : ''}`} aria-label="My account"
+      title={signedIn ? `My account · ${auth.user!.email} · ${LABEL[status]}` : auth.enabled ? 'Sign in or create an account' : 'My account'}>
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" /></svg>
+      {signedIn && <i className="sdot" />}
+      {!signedIn && auth.enabled && <span>Sign in</span>}
     </Link>
   )
 }

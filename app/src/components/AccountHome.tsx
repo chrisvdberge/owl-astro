@@ -3,6 +3,7 @@ import { gearDefaultFirst, gearName } from '../lib/gear'
 import { Link } from '../lib/router'
 import type { useStore } from '../lib/store'
 import AccountPanel from './Account'
+import { useCommentAdmin, usePendingComments } from './GuideComments'
 
 type Store = ReturnType<typeof useStore>
 
@@ -10,12 +11,20 @@ type Store = ReturnType<typeof useStore>
 export default function AccountHome({ store, auth }: { store: Store; auth: ReturnType<typeof useAuth> }) {
   const { settings } = store
   const gear = gearDefaultFirst(settings)
+  const admin = useCommentAdmin(auth.user)
+  const pending = usePendingComments(admin)
   return (
     <div className="settings">
       <section className="card">
         <h3>Account</h3>
         <AccountPanel auth={auth} status={store.syncStatus} />
       </section>
+      {admin && (
+        <section className="card">
+          <div className="ch"><h3>Guide comments</h3><span className="sp" /><Link to="/account/comments">Review →</Link></div>
+          <p className="note">{pending == null ? '…' : pending ? `${pending} waiting for approval` : 'Nothing waiting for approval'}</p>
+        </section>
+      )}
       <section className="card">
         <div className="ch"><h3>My gear</h3><span className="sp" /><Link to="/account/gear">Manage gear →</Link></div>
         {gear.length ? <ul className="plain">{gear.map((g, i) => <li key={g.id}>{i === 0 && settings.scope ? '★ ' : ''}{gearName(g)}{i === 0 && settings.scope ? <small className="note"> · default</small> : null}</li>)}</ul>

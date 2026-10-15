@@ -379,3 +379,7 @@ header a.acctbtn.synced .sdot { background: var(--ok); } header a.acctbtn.syncin
 .isoc circle.on { fill: var(--acc); } .isoc circle.off { fill: var(--warn); } .isoc circle.nr { fill: none; stroke: var(--mute); stroke-width: 1.2; }
 .k.isod { background: var(--acc); height: 6px; border-radius: 3px; } .k.offd { background: var(--warn); height: 6px; border-radius: 3px; } .k.nowd { background: var(--warn); width: 2px; height: 10px; }
 .k.lined { background: repeating-linear-gradient(90deg, var(--mute) 0 4px, transparent 4px 7px); } .k.nrd { border: 1.2px solid var(--mute); width: 6px; height: 6px; border-radius: 50%; }
+/* moderating comments on the guides */
+.gcl > li { border-top: 1px solid var(--line); padding: 10px 0; } .gcl > li:first-child { border-top: 0; }
+.gcb { white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0 8px; }
+.gcr textarea { width: 100%; box-sizing: border-box; margin: 8px 0 6px; font: inherit; }

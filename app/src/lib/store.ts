@@ -36,6 +36,10 @@ export function upgradeWish(w: WishItem & { framing?: FrameData; thumb?: string 
 interface State { locations: Location[]; activeId: string; wishlist: WishItem[]; settings: Settings; plan: PlanBlock[] }
 
 const KEY = 'astroplanner.v1'
+/** The account the local copy belongs to: data synced for one account must never be uploaded into another. */
+const OWNER_KEY = 'astroplanner.owner'
+const getOwner = () => { try { return localStorage.getItem(OWNER_KEY) } catch { return null } }
+const setOwner = (id: string | null) => { try { if (id) localStorage.setItem(OWNER_KEY, id); else localStorage.removeItem(OWNER_KEY) } catch { /* storage unavailable */ } }
 
 const DEFAULT: State = {
   locations: [{ id: 'home', name: 'Home (Amsterdam)', lat: 52.37, lon: 4.9, elevation: 0, horizon: [] }],
@@ -111,7 +115,17 @@ export function useStore(userId: string | null) {
     enqueue(diff(prev, next))
   }, [enqueue])
 
-  // On sign-in: take the remote copy, or upload the local data when the account is new.
+  // On sign-out (a user before, none now): the account's data leaves this device, so the next person starts clean.
+  const lastUser = useRef<string | null>(null)
+  useEffect(() => {
+    if (lastUser.current && !userId) {
+      pending.current.clear()
+      ref.current = DEFAULT; setState(DEFAULT); persist(DEFAULT); setOwner(null)
+    }
+    lastUser.current = userId
+  }, [userId])
+
+  // On sign-in: take the remote copy, or upload the local data when the account is new (only data no other account owns).
   useEffect(() => {
     ready.current = false
     if (!supabase || !userId) { setStatus('local'); return }
@@ -123,9 +137,13 @@ export function useStore(userId: string | null) {
         const remote = await pull(supabase!, ref.current.settings)
         if (dead) return
         if (remote) {
+          setOwner(userId)
           const r = initial ? atHome(remote) : { ...remote, activeId: ref.current.activeId && remote.locations.some((l) => l.id === ref.current.activeId) ? ref.current.activeId : remote.activeId }
           if (JSON.stringify(r) !== JSON.stringify({ ...ref.current })) { ref.current = r; setState(r); persist(r) }
         } else if (initial) {
+          const owner = getOwner()
+          if (owner && owner !== userId) { ref.current = DEFAULT; setState(DEFAULT); persist(DEFAULT) } // another account's data: start clean
+          setOwner(userId)
           ready.current = true
           enqueue(diff(EMPTY, ref.current))
           await flush()

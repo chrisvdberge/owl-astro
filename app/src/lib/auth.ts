@@ -20,6 +20,11 @@ export function useAuth() {
       const { error } = await supabase!.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } })
       return error?.message ?? null
     },
+    /** Signs in with the 6-digit code from the same email (for phones where the link opens another browser than the app). */
+    verifyCode: async (email: string, code: string) => {
+      const { error } = await supabase!.auth.verifyOtp({ email, token: code, type: 'email' })
+      return error?.message ?? null
+    },
     signOut: () => supabase!.auth.signOut(),
   }
 }

@@ -356,3 +356,4 @@ header .acct { margin-left: 0; }
 .evrow.off { opacity: .55; } .evrow p { margin: 2px 0; } .evrow .badge2 { margin-right: 4px; }
 .evwhen b { display: block; } .evwhen span { color: var(--mute); font-variant-numeric: tabular-nums; font-size: 13px; }
 @media (max-width: 600px) { .evrow { grid-template-columns: 1fr; gap: 4px; } .evwhen { display: flex; gap: 8px; } }
+.linkish { background: none; border: 0; padding: 0; color: var(--acc); text-decoration: underline; cursor: pointer; font: inherit; }

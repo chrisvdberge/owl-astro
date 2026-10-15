@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { extraObject, searchCatalog, type CatObject } from '../lib/catalog'
 import { DEFAULT_BORTLE, SKY_MAG, type Filter } from '../lib/exposure'
 import { MOUNTS, REFS, analyse, defaultMount, fmtS, pct, type Analysis, type Conditions, type Tone } from '../lib/gearplan'
-import { SETUPS_KEY, savedSetups, setupLabel } from '../lib/gear'
+import { SETUPS_KEY, defaultPatch, myGear, sameGear, savedSetups, setupLabel } from '../lib/gear'
 import { CAMERAS, PRESETS, findCamera, SCOPES, SEEING, framingFit, type Optics } from '../lib/optics'
 import { cutoutUrl } from '../lib/hips2fits'
 import { defaultSurvey } from '../lib/surveys'
@@ -10,7 +10,7 @@ import type { useStore } from '../lib/store'
 import { panelPolygons, type Scope } from './FramingPreview'
 
 type Store = ReturnType<typeof useStore>
-type Setup = Scope & { key: string; mount?: string; guided?: boolean }
+export type Setup = Scope & { key: string; mount?: string; guided?: boolean }
 
 const COND_KEY = 'astroplanner.gear.conditions'
 const COLORS = ['#38bdf8', '#fbbf24', '#f472b6', '#4ade80']
@@ -29,7 +29,8 @@ function starter(): Setup {
   return { key: crypto.randomUUID(), presetId: 'custom', mount: 'eq-mid', guided: false, optics: { apertureMm: s.apertureMm, focalLengthMm: s.focalLengthMm, sensorWmm: c.sensorWmm, sensorHmm: c.sensorHmm, pixelUm: c.pixelUm, binning: 1, drizzle: 1, reducer: 1, qe: c.qe, readNoise: c.readNoise, fullWell: c.fullWell, bits: c.bits } }
 }
 
-function SetupEditor({ s, color, onChange, onRemove, onDefault, isDefault }: { s: Setup; color: string; onChange: (s: Setup) => void; onRemove?: () => void; onDefault: () => void; isDefault: boolean }) {
+/** One telescope + camera (+ mount) to edit; `title` replaces the generated name, `actions` go at the bottom. Also used for "my gear". */
+export function SetupEditor({ s, color, onChange, onRemove, title, actions }: { s: Setup; color: string; onChange: (s: Setup) => void; onRemove?: () => void; title?: ReactNode; actions?: ReactNode }) {
   const o = s.optics
   const aio = AIO.find((p) => p.id === s.presetId)
   const scopeSel = aio?.id ?? SCOPES.find((t) => near(t.apertureMm, o.apertureMm) && near(t.focalLengthMm, o.focalLengthMm))?.id ?? ''
@@ -49,7 +50,7 @@ function SetupEditor({ s, color, onChange, onRemove, onDefault, isDefault }: { s
   )
   return (
     <div className="card gset" style={{ borderTopColor: color }}>
-      <div className="ch"><i className="gdot" style={{ background: color }} /><b className="gname">{setupLabel(o, s.presetId)}</b><span className="sp" />
+      <div className="ch"><i className="gdot" style={{ background: color }} />{title ?? <b className="gname">{setupLabel(o, s.presetId)}</b>}<span className="sp" />
         {onRemove && <button className="gx" title="Remove this setup" onClick={onRemove}>✕</button>}</div>
       <label className="f"><span>Telescope / lens</span>
         <select value={scopeSel} onChange={(e) => pick('scope', e.target.value)}>
@@ -77,7 +78,7 @@ function SetupEditor({ s, color, onChange, onRemove, onDefault, isDefault }: { s
         {num('sensorWmm', 'Sensor width mm')}{num('sensorHmm', 'Sensor height mm')}{num('pixelUm', 'Pixel µm')}
         {num('qe', 'Quantum efficiency 0–1', '0.05')}{num('readNoise', 'Read noise e⁻', '0.1')}{num('fullWell', 'Full well e⁻', '1000')}{num('bits', 'ADC bits', '1')}
       </details>
-      <div className="row wrap"><button disabled={isDefault} onClick={onDefault} title="Used for framing previews, exposure estimates and as the starting setup on the sky view">{isDefault ? '★ Your default' : '☆ Make default'}</button></div>
+      {actions && <div className="row wrap">{actions}</div>}
     </div>
   )
 }
@@ -123,7 +124,8 @@ export default function GearPlanner({ store, catalog, scope }: { store: Store; c
   const res: Analysis[] = useMemo(() => setups.map((s) => analyse(s.optics, s.presetId, c, s.mount ?? defaultMount(s.presetId), !!s.guided)), [setups, c])
   const pickTarget = (o: CatObject) => { setTargetId(o.id); setQ(''); try { localStorage.setItem('astroplanner.gear.target', o.id) } catch { /* ignore */ } }
 
-  const isDefault = (s: Setup) => s.presetId === scope.presetId && JSON.stringify(s.optics) === JSON.stringify(scope.optics)
+  const isDefault = (s: Setup) => sameGear(s, scope)
+  const owned = (s: Setup) => myGear(store.settings).some((g) => sameGear(g, s))
   const n = setups.length
   const name = (o: CatObject) => (o.m ? `${o.m} (${o.names[0] ?? o.id})` : o.names[0] ? `${o.id} · ${o.names[0]}` : o.id)
 
@@ -160,10 +162,13 @@ export default function GearPlanner({ store, catalog, scope }: { store: Store; c
 
       <div className="gsets">
         {setups.map((s, i) => (
-          <SetupEditor key={s.key} s={s} color={COLORS[i]} isDefault={isDefault(s)}
+          <SetupEditor key={s.key} s={s} color={COLORS[i]}
             onChange={(x) => save(setups.map((y) => (y.key === s.key ? x : y)))}
             onRemove={n > 1 ? () => save(setups.filter((y) => y.key !== s.key)) : undefined}
-            onDefault={() => store.setSettings({ scope: { presetId: s.presetId, optics: s.optics } })} />
+            actions={<>
+              <button disabled={isDefault(s)} onClick={() => store.setSettings(defaultPatch(store.settings, s))} title="Used for framing previews, exposure estimates and as the starting setup on the sky view">{isDefault(s) ? '★ Your default' : '☆ Make default'}</button>
+              {owned(s) ? <small className="note">In my gear</small> : <button onClick={() => store.setSettings({ gear: [...myGear(store.settings), { id: crypto.randomUUID(), presetId: s.presetId, optics: s.optics, mount: s.mount, guided: s.guided }] })} title="Keep it with your account, under Account → My gear">＋ Add to my gear</button>}
+            </>} />
         ))}
         {n < MAX && <button className="gadd" onClick={() => save([...setups, { ...setups[n - 1], key: crypto.randomUUID() }])}>+ Add a setup to compare</button>}
       </div>

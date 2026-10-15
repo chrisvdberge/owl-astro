@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CATALOGS, catalogTag, searchCatalog, type CatObject } from '../lib/catalog'
 import { compute, framingFit } from '../lib/optics'
-import { savedSetups, setupLabel } from '../lib/gear'
+import { gearDefaultFirst, gearName, sameGear } from '../lib/gear'
 import { defaultSurvey } from '../lib/surveys'
 import { cutoutUrl } from '../lib/hips2fits'
 import { filterShort } from '../lib/filters'
@@ -62,14 +62,11 @@ export default function Catalogue({ store, catalog, scope, con: startCon, onDeta
   }
 
   const wishById = useMemo(() => new Map(wishlist.map((w) => [w.id, w])), [wishlist])
-  // the default setup first, then any others saved in the gear planner (same gear only once)
+  // your gear, the default first (it is the scope the app uses everywhere else)
   const setups = useMemo(() => {
-    const seen = new Set<string>()
-    return [scope, ...(savedSetups<Scope>() ?? [])].filter((s) => {
-      const k = setupLabel(s.optics, s.presetId) + JSON.stringify(s.optics)
-      return !seen.has(k) && !!seen.add(k)
-    })
-  }, [scope])
+    const gear = gearDefaultFirst(store.settings)
+    return gear.some((g) => sameGear(g, scope)) ? gear : [{ id: 'default', ...scope }, ...gear]
+  }, [store.settings, scope])
   const setup = setups[setupIx] ?? scope
   const fov = useMemo(() => compute(setup.optics, 3), [setup])
   const constellations = useMemo(() => [...new Set(catalog.map((o) => o.con))].filter(Boolean).sort(), [catalog])
@@ -123,7 +120,7 @@ export default function Catalogue({ store, catalog, scope, con: startCon, onDeta
         <select value={mag} onChange={(e) => setMag(+e.target.value)}>{MAGS.map((m) => <option key={m.v} value={m.v}>{m.l}</option>)}</select>
         <select value={size} onChange={(e) => setSize(+e.target.value)}>{SIZES.map((s) => <option key={s.v} value={s.v}>{s.l}</option>)}</select>
         <select value={fill} onChange={(e) => setFill(+e.target.value)} title="Share of the sensor's pixels the object covers">{FILLS.map((f) => <option key={f.v} value={f.v}>{f.l}</option>)}</select>
-        {setups.length > 1 && <select value={setupIx} onChange={(e) => setSetupIx(+e.target.value)} title="Setup used for frame fill and the fit badges">{setups.map((s, i) => <option key={i} value={i}>{setupLabel(s.optics, s.presetId)}{i === 0 ? ' (default)' : ''}</option>)}</select>}
+        {setups.length > 1 && <select value={setupIx} onChange={(e) => setSetupIx(+e.target.value)} title="Which of your gear the frame fill and fit badges use">{setups.map((s, i) => <option key={s.id} value={i}>{gearName(s)}{i === 0 ? ' (default)' : ''}</option>)}</select>}
       </div>
       <div className="catbar">
         <div className="chips">{GROUPS.map((g) => <button key={g.id} className={group === g.id ? 'on' : ''} onClick={() => setGroup(g.id)}>{g.label}</button>)}</div>

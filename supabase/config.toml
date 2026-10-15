@@ -244,6 +244,16 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
+# Sign-in emails carry both the link and the 6-digit code (the app accepts either). The hosted project needs the same
+# templates set in the dashboard: Authentication → Email Templates → Magic Link and Confirm signup.
+[auth.email.template.magic_link]
+subject = "Your Owl Astro sign-in"
+content_path = "./supabase/templates/magic_link.html"
+
+[auth.email.template.confirmation]
+subject = "Your Owl Astro sign-in"
+content_path = "./supabase/templates/confirmation.html"
+
 # Uncomment to customize email template
 # [auth.email.template.invite]
 # subject = "You have been invited"

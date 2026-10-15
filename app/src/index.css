@@ -357,3 +357,10 @@ header .acct { margin-left: 0; }
 .evwhen b { display: block; } .evwhen span { color: var(--mute); font-variant-numeric: tabular-nums; font-size: 13px; }
 @media (max-width: 600px) { .evrow { grid-template-columns: 1fr; gap: 4px; } .evwhen { display: flex; gap: 8px; } }
 .linkish { background: none; border: 0; padding: 0; color: var(--acc); text-decoration: underline; cursor: pointer; font: inherit; }
+/* account: my gear */
+.gset .gtitle { flex: 1; min-width: 0; margin: 0; font-weight: 600; background: transparent; border-color: transparent; padding: 3px 6px; }
+.gset .gtitle::placeholder { color: var(--fg); opacity: .85; }
+.gset .gtitle:hover, .gset .gtitle:focus { border-color: var(--line); background: var(--bg); }
+.gdef { color: var(--warn); } ul.plain { list-style: none; padding: 0; margin: 6px 0; } ul.plain li { padding: 3px 0; }
+.mygear > .note { max-width: 760px; }
+header a.acct { text-decoration: none; color: inherit; border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; }

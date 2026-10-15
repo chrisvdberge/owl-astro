@@ -37,19 +37,21 @@ export function SiteSwitcher({ store }: { store: Store }) {
             </button>
           ))}
           <hr />
-          <button onClick={() => { navigate('/setup/sites'); close() }}>Manage and add sites…</button>
+          <button onClick={() => { navigate('/account/sites'); close() }}>Manage and add sites…</button>
         </>
       )}
     </Popover>
   )
 }
 
-export const SETUP: [string, string, string][] = [['/setup/gear', 'Gear planner', 'Compare scopes and cameras'], ['/setup/sites', 'Sites', 'Light pollution, horizons, home'], ['/setup/inspector', 'Image inspector', 'Check stars and noise'], ['/setup/settings', 'Settings', 'Planning limits, account']]
+/** The account's own pages, and the tools that are not about one account's data. */
+export const ACCOUNT: [string, string, string][] = [['/account', 'My account', 'Sign-in, sync, planning limits'], ['/account/gear', 'My gear', 'Your telescopes and cameras'], ['/account/sites', 'My sites', 'Light pollution, horizons, home']]
+export const TOOLS: [string, string, string][] = [['/tools/gear', 'Gear planner', 'Compare scopes and cameras'], ['/tools/inspector', 'Image inspector', 'Check stars and noise']]
 
-export function SetupMenu({ active }: { active: boolean }) {
+export function ToolsMenu({ active }: { active: boolean }) {
   return (
-    <Popover className={`setupm ${active ? 'cur' : ''}`} label={<>Setup <span className="car">▾</span></>}>
-      {(close) => SETUP.map(([to, name, sub]) => <Link key={to} to={to} onClick={close}><b>{name}</b><small>{sub}</small></Link>)}
+    <Popover className={`setupm ${active ? 'cur' : ''}`} label={<>Tools <span className="car">▾</span></>}>
+      {(close) => TOOLS.map(([to, name, sub]) => <Link key={to} to={to} onClick={close}><b>{name}</b><small>{sub}</small></Link>)}
     </Popover>
   )
 }

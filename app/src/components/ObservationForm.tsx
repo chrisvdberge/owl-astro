@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { extraObject, isCustom, searchCatalog, type CatObject } from '../lib/catalog'
-import { unitLabels } from '../lib/gear'
+import { gearName, myGear, unitLabels } from '../lib/gear'
 import { nightNow, tzOf } from '../lib/tz'
 import type { useStore } from '../lib/store'
 
@@ -29,7 +29,7 @@ export default function ObservationForm({ store, catalog, setup: defaultSetup, p
   const [hours, setHours] = useState(editing ? String(editing.hours) : prefill.hours ? String(Math.round(prefill.hours * 100) / 100) : '')
   const [note, setNote] = useState(editing?.note ?? '')
 
-  const known = useMemo(() => [...new Set([defaultSetup, ...unitLabels(), ...wishlist.flatMap((w) => (w.sessions ?? []).flatMap((s) => (s.setup ? [s.setup] : [])))])], [defaultSetup, wishlist])
+  const known = useMemo(() => [...new Set([defaultSetup, ...myGear(store.settings).map(gearName), ...unitLabels(), ...wishlist.flatMap((w) => (w.sessions ?? []).flatMap((s) => (s.setup ? [s.setup] : [])))])], [defaultSetup, wishlist, store.settings])
   const hits = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (q.length < 2) return wishlist.filter((w) => w.status !== 'done').flatMap((w) => { const o = find(w.id); return o ? [o] : [] }).slice(0, 8)

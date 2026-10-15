@@ -9,7 +9,7 @@ import { altAzToRaDec, glowAlt, horizonAlt, limitAlt, lstHours, parallacticAngle
 import { useStore, type Status } from './lib/store'
 import { clockIn, momentAt, nightNow, tzFromCoords, tzOf, zonedEpoch } from './lib/tz'
 import { useAuth } from './lib/auth'
-import Account from './components/Account'
+import { AccountButton } from './components/Account'
 import HorizonEditor from './components/HorizonEditor'
 import AltitudeChart from './components/AltitudeChart'
 import Planner from './components/Planner'
@@ -30,15 +30,16 @@ import Observations from './components/Observations'
 import Inspector from './components/Inspector'
 import GearPlanner from './components/GearPlanner'
 import SiteView from './components/SiteView'
-import Settings from './components/Settings'
-import { SETUP, SetupMenu, SiteSwitcher, TabBar } from './components/Nav'
+import AccountHome from './components/AccountHome'
+import MyGear from './components/MyGear'
+import { ACCOUNT, TOOLS, ToolsMenu, SiteSwitcher, TabBar } from './components/Nav'
 import { Link, navigate, useRoute, withQuery } from './lib/router'
 import ObservationForm, { type ObsPrefill } from './components/ObservationForm'
-import { gearNames, setupLabel } from './lib/gear'
+import { defaultPatch, gearNames, setupLabel } from './lib/gear'
 import { analyseSite } from './lib/lightpollution'
 
 
-type View = 'tonight' | 'sky' | 'targets' | 'browse' | 'comets' | 'events' | 'plan' | 'log' | 'gear' | 'sites' | 'inspector' | 'settings'
+type View = 'tonight' | 'sky' | 'targets' | 'browse' | 'comets' | 'events' | 'plan' | 'log' | 'gear' | 'sites' | 'inspector' | 'account' | 'mygear'
 const nameOf = (o: CatObject) => (isCustom(o.id) ? o.names[0] : o.m ?? o.id)
 /** One-line summary for identifying an object on the sky: type, magnitude, size. */
 const objFacts = (o: CatObject) => [o.typeName, o.mag != null && `${o.mag.toFixed(1)} mag`, o.maj != null && `${+o.maj.toFixed(1)}′${o.min != null && o.min !== o.maj ? `×${+o.min.toFixed(1)}′` : ''}`].filter(Boolean).join(' · ')
@@ -96,18 +97,23 @@ export default function App() {
   const setTmin = (t: number) => setMoment((m) => ({ ...m, tmin: t }))
   const [mount, setMount] = useState<'altaz' | 'eq'>(() => { try { return localStorage.getItem('astroplanner.mount') === 'eq' ? 'eq' : 'altaz' } catch { return 'altaz' } })
   const minAlt = store.settings.minAlt
-  // the page comes from the URL: /tonight[/date], /sky[/target], /targets[/browse], /plan, /log, /setup/{gear,sites,inspector,settings}
+  // the page comes from the URL: /tonight[/date], /sky[/target], /targets[/browse|comets|events], /plan, /log, /account[/gear|sites], /tools/{gear,inspector}
   const route = useRoute()
   const [p0, p1] = route.path
   const view: View = p0 === 'sky' ? 'sky' : p0 === 'targets' ? (p1 === 'browse' ? 'browse' : p1 === 'comets' ? 'comets' : p1 === 'events' ? 'events' : 'targets') : p0 === 'plan' ? 'plan' : p0 === 'log' ? 'log'
-    : p0 === 'setup' ? (p1 === 'gear' ? 'gear' : p1 === 'inspector' ? 'inspector' : p1 === 'settings' ? 'settings' : 'sites') : 'tonight'
-  const section = view === 'browse' || view === 'comets' || view === 'events' ? 'targets' : ['gear', 'sites', 'inspector', 'settings'].includes(view) ? 'setup' : view
+    : p0 === 'account' ? (p1 === 'gear' ? 'mygear' : p1 === 'sites' ? 'sites' : 'account') : p0 === 'tools' ? (p1 === 'inspector' ? 'inspector' : 'gear') : 'tonight'
+  const section = view === 'browse' || view === 'comets' || view === 'events' ? 'targets' : ['account', 'mygear', 'sites'].includes(view) ? 'account' : ['gear', 'inspector'].includes(view) ? 'tools' : view
+  // addresses from before the account pages (bookmarks, the installed app)
+  useEffect(() => {
+    if (p0 !== 'setup') return
+    navigate(p1 === 'gear' ? '/tools/gear' : p1 === 'inspector' ? '/tools/inspector' : p1 === 'sites' ? '/account/sites' : '/account', { replace: true })
+  }, [p0, p1])
   // the bare address opens on Tonight once there is something to plan, otherwise on the sky
   useEffect(() => { if (!p0) navigate(store.wishlist.some((w) => w.status !== 'done') ? '/tonight' : '/sky', { replace: true }) }, [p0]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (view !== 'sky') { setFrameSel(false); setMenu(null); setHover(null); setPicked(null); setPickedCon(null); setMarkTip(null) } }, [view])
   const skyPath = target.obj ? `/sky/${encodeURIComponent(slugOf(target.obj))}` : '/sky'
   const NAV: [string, string, string, string][] = [['tonight', '/tonight', 'Tonight', '☾'], ['sky', skyPath, 'Sky', '✦'], ['targets', '/targets', 'Targets', '☆'], ['plan', '/plan', 'Plan', '▦'], ['log', '/log', 'Log', '✎']]
-  const goView = (v: 'sites') => navigate(`/setup/${v}`)
+  const goView = (v: 'sites') => navigate(`/account/${v}`)
   // custom fields are targets too (found by their id in URLs)
   const routed = useRef('') // the /sky/<target>?framing route last put on the sky
   const [cometsTick, setCometsTick] = useState(0) // bumps when the MPC list arrives for a comet linked directly
@@ -812,7 +818,7 @@ export default function App() {
         </label>
         {num('reducer', 'Reducer / barlow ×')}
         <div className="row wrap">
-          <button disabled={scopeIsDefault} onClick={() => store.setSettings({ scope: { presetId, optics } })} title="Used for framing previews in target cards and as the starting setup">★ Make default scope</button>
+          <button disabled={scopeIsDefault} onClick={() => store.setSettings(defaultPatch(store.settings, { presetId, optics }))} title="Used for framing previews in target cards and as the starting setup">★ Make default scope</button>
           <small className="note">Default: {scopeName(defaultScope)}</small>
         </div>
         <label className="f"><span>Mount</span>
@@ -991,17 +997,16 @@ export default function App() {
       <header>
         <Link to="/tonight" className="brand"><img src="/favicon.svg" alt="" width={26} height={26} />Owl Astro</Link>
         <nav className="nav">{NAV.map(([id, to, name]) => <Link key={id} to={to} className={section === id ? 'on' : ''}>{name}{id === 'targets' && store.wishlist.length ? <small>{store.wishlist.length}</small> : null}</Link>)}</nav>
-        <span className="here">{view === 'browse' || view === 'comets' || view === 'events' ? 'Targets' : view === 'sites' ? 'Sites' : view === 'gear' ? 'Gear' : view === 'inspector' ? 'Inspector' : view === 'settings' ? 'Settings' : NAV.find(([id]) => id === view)?.[2]}</span>
+        <span className="here">{view === 'browse' || view === 'comets' || view === 'events' ? 'Targets' : view === 'sites' ? 'My sites' : view === 'mygear' ? 'My gear' : view === 'account' ? 'Account' : view === 'gear' ? 'Gear planner' : view === 'inspector' ? 'Inspector' : NAV.find(([id]) => id === view)?.[2]}</span>
         <span className="sp" />
         {!online && <span className="offline" title="No connection: planning works, forecasts, survey images and sync resume when you are back online">Offline</span>}
         <SiteSwitcher store={store} />
-        <SetupMenu active={section === 'setup'} />
-        <span className="acctslot"><Account auth={auth} status={store.syncStatus} /></span>
+        <ToolsMenu active={section === 'tools'} />
+        <span className="acctslot"><AccountButton auth={auth} status={store.syncStatus} /></span>
       </header>
       <TabBar items={NAV.slice(0, 4)} current={['tonight', 'sky', 'targets', 'plan'].includes(section) ? section : 'more'} more={<>
         <Link to="/log" className={view === 'log' ? 'on' : ''}><b>Log</b><small>Your observations</small></Link>
-        {SETUP.map(([to, name, sub]) => <Link key={to} to={to} className={route.path.join('/') === to.slice(1) ? 'on' : ''}><b>{name}</b><small>{sub}</small></Link>)}
-        <div className="macct" onClick={(e) => e.stopPropagation()}><Account auth={auth} status={store.syncStatus} /></div>
+        {[...ACCOUNT, ...TOOLS].map(([to, name, sub]) => <Link key={to} to={to} className={route.path.join('/') === to.slice(1) ? 'on' : ''}><b>{name}</b><small>{to === '/account' && auth.user ? auth.user.email : sub}</small></Link>)}
       </>} />
       {view === 'sky' && <div className="skytgt">{target.label} · {sexa(target.ra, target.dec)} · {res.fovW.toFixed(2)}°×{res.fovH.toFixed(2)}°</div>}
       {view === 'sky' && (
@@ -1029,9 +1034,16 @@ export default function App() {
       {view === 'plan' && <main className="pmain"><div className="subnav"><h2 className="th">Plan <small>the year ahead for your targets</small></h2></div><Planner mode="calendar" store={store} catalog={catalog} onShow={show} onDetails={setDetail} onLog={setObs} /></main>}
       {view === 'log' && <main className="pmain"><Observations store={store} catalog={catalog} onDetails={setDetail} onAdd={() => setObs({})} onEdit={setObs} /></main>}
       {view === 'inspector' && <main className="pmain"><Inspector store={store} catalog={catalog} scope={defaultScope} /></main>}
-      {view === 'sites' && <main className="pmain"><SiteView store={store} /></main>}
+      {section === 'account' && (
+        <main className="pmain">
+          <div className="subnav"><h2 className="th">Account</h2>
+            {ACCOUNT.map(([to, name]) => <Link key={to} to={to} className={route.path.join('/') === to.slice(1) ? 'on' : ''}>{name}</Link>)}</div>
+          {view === 'account' && <AccountHome store={store} auth={auth} />}
+          {view === 'mygear' && <MyGear store={store} />}
+          {view === 'sites' && <SiteView store={store} />}
+        </main>
+      )}
       {view === 'gear' && <main className="pmain"><GearPlanner store={store} catalog={catalog} scope={defaultScope} /></main>}
-      {view === 'settings' && <main className="pmain"><Settings store={store} scope={defaultScope} auth={auth} /></main>}
       <aside className={`l ${panel === 'left' ? 'open' : ''}`}>{left}</aside>
       <div className="view" ref={viewRef} />
       {menu && (() => {

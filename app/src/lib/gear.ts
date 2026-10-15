@@ -35,3 +35,27 @@ export const SETUPS_KEY = 'astroplanner.gear.setups'
 export function savedSetups<T extends { presetId: string; optics: Optics }>(): T[] | null {
   try { const v = localStorage.getItem(SETUPS_KEY); return v ? JSON.parse(v) : null } catch { return null }
 }
+
+/** A telescope + camera combination the user owns (their account's "my gear"); `name` is optional, e.g. "Backyard rig". */
+export interface GearItem { id: string; name?: string; presetId: string; optics: Optics; mount?: string; guided?: boolean }
+type ScopeLike = { presetId: string; optics: Optics }
+type GearSettings = { scope?: ScopeLike; gear?: GearItem[] }
+
+export const gearName = (g: GearItem) => g.name?.trim() || setupLabel(g.optics, g.presetId)
+export const sameGear = (a: ScopeLike, b: ScopeLike) => a.presetId === b.presetId && JSON.stringify(a.optics) === JSON.stringify(b.optics)
+
+/** The user's gear in their order; accounts from before "my gear" have just their default scope. */
+export const myGear = (s: GearSettings): GearItem[] => (s.gear?.length ? s.gear : s.scope ? [{ id: 'default', ...s.scope }] : [])
+
+/** The same, the default first (for pickers and summaries). */
+export function gearDefaultFirst(s: GearSettings): GearItem[] {
+  const list = myGear(s), d = s.scope && list.find((g) => sameGear(g, s.scope!))
+  return d ? [d, ...list.filter((g) => g !== d)] : list
+}
+
+/** Settings patch that makes a setup the default, adding it to my gear when it is not there yet. */
+export function defaultPatch(s: GearSettings, scope: ScopeLike): GearSettings {
+  const list = myGear(s)
+  const has = list.some((g) => sameGear(g, scope))
+  return { scope: { presetId: scope.presetId, optics: scope.optics }, gear: has ? list : [...list, { id: crypto.randomUUID(), presetId: scope.presetId, optics: scope.optics }] }
+}

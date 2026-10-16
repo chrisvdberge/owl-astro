@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { extraObject, guessTarget, isCustom, type CatObject } from '../lib/catalog'
-import { AREAS, analyze, notes, type Review } from '../lib/review'
+import { AREAS, analyze, notes, type Rect, type Review } from '../lib/review'
 import { defaultFilter, type Filter } from '../lib/exposure'
 import { gearDefaultFirst, gearName, setupLabel, type GearItem } from '../lib/gear'
 import { defaultMount } from '../lib/gearplan'
@@ -20,7 +20,7 @@ type Store = ReturnType<typeof useStore>
 const MAX_PIXELS = 12e6
 
 /** Decode in the browser and hand the pixels to the worker (or review here when workers are unavailable). */
-async function review(file: File): Promise<{ result: Review; thumb: string; scaled: () => Promise<Blob> }> {
+async function review(file: File, exclude: Rect[] = []): Promise<{ result: Review; thumb: string; scaled: () => Promise<Blob> }> {
   let bmp: ImageBitmap
   try { bmp = await createImageBitmap(file) } catch {
     throw new Error('This browser can\'t open that file. Export a JPEG or PNG (browsers don\'t read FITS, and most not 16-bit TIFF).')
@@ -41,12 +41,12 @@ async function review(file: File): Promise<{ result: Review; thumb: string; scal
   const scaled = () => new Promise<Blob>((resolve, reject) => cv.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not encode the image.'))), 'image/jpeg', 0.92))
   let worker: Worker
   try { worker = new Worker(new URL('../lib/review.worker.ts', import.meta.url), { type: 'module' }) } catch {
-    return { result: analyze(px, scale), thumb, scaled }
+    return { result: analyze(px, scale, exclude), thumb, scaled }
   }
   const result = await new Promise<Review>((resolve, reject) => {
     worker.onmessage = (e: MessageEvent<{ ok: boolean; review?: Review; error?: string }>) => (e.data.ok ? resolve(e.data.review!) : reject(new Error(e.data.error)))
     worker.onerror = (e) => reject(new Error(e.message || 'The review failed.'))
-    worker.postMessage({ width: w, height: h, data: px.data.buffer, scale }, [px.data.buffer])
+    worker.postMessage({ width: w, height: h, data: px.data.buffer, scale, exclude }, [px.data.buffer])
   }).finally(() => worker.terminate())
   return { result, thumb, scaled }
 }
@@ -60,7 +60,7 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
   const [saving, setSaving] = useState<'' | 'saving' | 'saved'>('')
   const [err, setErr] = useState('')
   const [setUp, setSetUp] = useState(true)
-  const [cur, setCur] = useState<{ id: string; name: string; src: string; result: Review; targetId?: string } | null>(null)
+  const [cur, setCur] = useState<{ id: string; name: string; src: string; result: Review; targetId?: string; file?: File } | null>(null)
   const [local, setLocal] = useState<SavedReview[]>(loadLocal)
   const [remote, setRemote] = useState<{ uid: string; list: SavedReview[] } | null>(null)
   const [targetId, setTargetId] = useState('')
@@ -121,8 +121,30 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
     return () => clearTimeout(t)
   }, [cur?.id, targetId, inp]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const [marking, setMarking] = useState(false)
+  const [drawRect, setDrawRect] = useState<Rect | null>(null)
+  const drawStart = useRef<{ x: number; y: number } | null>(null)
+  /** Review the open file again with these areas left out, and keep the new result with the saved review. */
+  const rerun = async (manual: Rect[]) => {
+    // the file behind the current review, while it is open: needed to review it again without the marked areas
+    const file = cur?.file
+    if (!file || !cur) return
+    setBusy(true); setErr('')
+    try {
+      const { result } = await review(file, manual)
+      setCur((c) => (c && c.id === cur.id ? { ...c, result } : c))
+      const patch = (h: SavedReview) => (h.id === cur.id ? { ...h, result } : h)
+      setLocal((l) => { if (!l.some((x) => x.id === cur.id)) return l; const next = l.map(patch); saveLocal(next); return next })
+      const rem = remote?.list.find((x) => x.id === cur.id)
+      if (rem && db) { setRemote((rr) => rr && { ...rr, list: rr.list.map(patch) }); await updateReview(db, patch(rem)) }
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
+  }
+  const manualRects = cur?.result.excluded?.manual ?? []
+  const pos = (e: React.PointerEvent<HTMLElement>) => { const b = e.currentTarget.getBoundingClientRect(); return { x: Math.min(1, Math.max(0, (e.clientX - b.left) / b.width)), y: Math.min(1, Math.max(0, (e.clientY - b.top) / b.height)) } }
+  const box = (a: { x: number; y: number }, b: { x: number; y: number }): Rect => ({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y) })
+
   const run = async (file: File) => {
-    setBusy(true); setErr(''); setSaving('')
+    setBusy(true); setErr(''); setSaving(''); setMarking(false)
     try {
       const { result, thumb, scaled } = await review(file)
       if (objUrl.current) URL.revokeObjectURL(objUrl.current)
@@ -135,7 +157,7 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
       const inputs: ReviewInputs = { ...inp, ...fromLog, size: inp.size === 'custom' ? 'custom' : looksResized(gear, W, H) ? 'resized' : 'captured' }
       setInp(inputs); stored.current = JSON.stringify([tid, inputs]); setCmpId('')
       const rec = { id: crypto.randomUUID(), at: new Date().toISOString(), name: file.name, targetId: tid || undefined, thumb, result, inputs }
-      setCur({ id: rec.id, name: file.name, src: objUrl.current, result, targetId: rec.targetId })
+      setCur({ id: rec.id, name: file.name, src: objUrl.current, result, targetId: rec.targetId, file })
       setBusy(false)
       if (db && user && setUp) {
         setSaving('saving')
@@ -154,7 +176,7 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
   }
   const open = async (h: SavedReview) => {
-    setCur({ id: h.id, name: h.name, src: h.thumb, result: h.result, targetId: h.targetId }); setSaving('')
+    setCur({ id: h.id, name: h.name, src: h.thumb, result: h.result, targetId: h.targetId }); setSaving(''); setMarking(false)
     const inputs = h.inputs ?? inp
     setTargetId(h.targetId ?? ''); setInp(inputs); stored.current = JSON.stringify([h.targetId ?? '', inputs]); setCmpId('')
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -234,14 +256,31 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
             </select></label>
           {other && ctx && <ReviewCompare a={{ name: cur.name, src: cur.src, result: r, ctx }} b={{ name: other.name, at: other.at, src: cmpSrc[other.id] ?? other.thumb, result: other.result, ctx: ctxOf(other.result, other.inputs, other.targetId) }} onClose={() => setCmpId('')} />}
           <div className="rvtop">
-            <figure className="rvimg">
-              <img src={cur.src} alt="" />
-              {r.artefacts.dust.length > 0 && (
-                <svg viewBox={`0 0 ${r.image.width} ${r.image.height}`} preserveAspectRatio="none" aria-label="Dust motes">
-                  {r.artefacts.dust.map((d, i) => <ellipse key={i} cx={d.x * r.image.width} cy={d.y * r.image.height} rx={(d.d * r.image.width) / 2 + 6} ry={(d.d * r.image.width) / 2 + 6}><title>{`Dark spot, ${d.depth.toFixed(1)} levels deep`}</title></ellipse>)}
-                </svg>
-              )}
+            <div>
+            <figure className={`rvimg ${marking ? 'marking' : ''}`}
+              onPointerDown={(e) => { if (!marking || busy || (e.target as Element).classList.contains('exman')) return; e.currentTarget.setPointerCapture(e.pointerId); drawStart.current = pos(e); setDrawRect(box(drawStart.current, drawStart.current)) }}
+              onPointerMove={(e) => { if (drawStart.current) setDrawRect(box(drawStart.current, pos(e))) }}
+              onPointerUp={(e) => {
+                const st = drawStart.current
+                drawStart.current = null; setDrawRect(null)
+                if (!st) return
+                const rc = box(st, pos(e))
+                if (rc.w > 0.01 && rc.h > 0.01) rerun([...manualRects, rc])
+              }}>
+              <img src={cur.src} alt="" draggable={false} />
+              <svg viewBox={`0 0 ${r.image.width} ${r.image.height}`} preserveAspectRatio="none" aria-label="Marked areas">
+                {r.artefacts.dust.map((d, i) => <ellipse key={i} cx={d.x * r.image.width} cy={d.y * r.image.height} rx={(d.d * r.image.width) / 2 + 6} ry={(d.d * r.image.width) / 2 + 6}><title>{`Dark spot, ${d.depth.toFixed(1)} levels deep`}</title></ellipse>)}
+                {r.excluded?.auto.map((x, i) => <rect key={`a${i}`} className="exauto" x={x.x * r.image.width} y={x.y * r.image.height} width={x.w * r.image.width} height={x.h * r.image.height}><title>Overlay text, left out of the review</title></rect>)}
+                {manualRects.map((x, i) => <rect key={`m${i}`} className="exman" x={x.x * r.image.width} y={x.y * r.image.height} width={x.w * r.image.width} height={x.h * r.image.height}
+                  onClick={() => { if (marking && !busy) rerun(manualRects.filter((_, k) => k !== i)) }}><title>{marking ? 'Click to review this area again' : 'Left out of the review'}</title></rect>)}
+                {drawRect && <rect className="exman" x={drawRect.x * r.image.width} y={drawRect.y * r.image.height} width={drawRect.w * r.image.width} height={drawRect.h * r.image.height} />}
+              </svg>
             </figure>
+            <div className="rvexcl">
+              <small>{r.excluded?.auto.length ? `Overlay text found and left out (${r.excluded.auto.length} line${r.excluded.auto.length > 1 ? 's' : ''}, dashed). ` : ''}{manualRects.length ? `${manualRects.length} area${manualRects.length > 1 ? 's' : ''} you marked ${manualRects.length > 1 ? 'are' : 'is'} left out. ` : ''}{marking ? 'Drag a box over anything to leave out; click a box to bring it back.' : ''}</small>
+              <button onClick={() => setMarking(!marking)} disabled={!cur.file || busy} title={cur.file ? undefined : 'Drop the image again to change what is left out'}>{marking ? 'Done' : 'Ignore an area…'}</button>
+            </div>
+            </div>
             <div className="istats">
               <Stat k="Background" v={b.reliable ? `${b.level.toFixed(0)}/255` : '–'} s={b.reliable ? `${b.colour ? (b.cast ? `leans ${b.cast}` : 'neutral') + ' · ' : ''}aim for 20–30` : 'object fills the frame'} />
               <Stat k="Gradient" v={b.reliable ? `${b.gradient.peakToPeak.toFixed(1)}` : '–'} s="levels across the frame" />

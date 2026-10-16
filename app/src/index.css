@@ -242,6 +242,9 @@ details.more { margin-top: 8px; } details.more summary { cursor: pointer; color:
 .rvcmpimg { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } .rvcmpimg figure { margin: 0; } .rvcmpimg img { width: 100%; border-radius: 8px; display: block; } .rvcmpimg figcaption { font-size: 12.5px; margin-top: 4px; overflow-wrap: anywhere; } .rvcmpimg small { color: var(--mute); }
 .rvcmptab { width: 100%; border-collapse: collapse; font-size: 13.5px; } .rvcmptab th, .rvcmptab td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: right; } .rvcmptab td:first-child { text-align: left; color: var(--mute); }
 .rvcmptab td.win { color: var(--ok); font-weight: 600; } .rvcmptab td.lose { color: var(--warn); }
+.rvimg.marking { cursor: crosshair; touch-action: none; } .rvimg.marking svg { pointer-events: none; } .rvimg.marking svg rect.exman { pointer-events: all; cursor: pointer; }
+.rvimg rect { fill: rgba(56,189,248,.12); stroke: var(--acc); stroke-width: 2; vector-effect: non-scaling-stroke; } .rvimg rect.exauto { stroke-dasharray: 5 4; fill: rgba(139,151,171,.15); stroke: var(--mute); }
+.rvexcl { display: flex; align-items: center; gap: 10px; justify-content: space-between; margin-top: 6px; } .rvexcl small { color: var(--mute); }
 .rvthumb { width: 54px; height: 36px; object-fit: cover; border-radius: 4px; }
 @media (max-width: 800px) { .rvtop { grid-template-columns: 1fr; } }
 @media (max-width: 700px) { .rvtop .istats { grid-template-columns: 1fr 1fr; } .rvgrids .igrid > div span { font-size: 9px; padding: 6px 0; letter-spacing: -0.3px; } }

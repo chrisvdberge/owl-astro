@@ -7,6 +7,8 @@
 
 export interface RgbaImage { width: number; height: number; data: Uint8ClampedArray }
 export interface Spread { median: number; p10: number; p90: number }
+/** An area left out of the review (overlay text, a logo, a frame), as fractions of the image width and height. */
+export interface Rect { x: number; y: number; w: number; h: number }
 /** A dark round spot: centre and diameter as fractions of the image width and height, depth in levels below the background. */
 export interface DustSpot { x: number; y: number; d: number; depth: number }
 
@@ -39,6 +41,7 @@ export interface Review {
     streaks: { direction: number; strength: number } | null
     specksPerMp: number
   }
+  excluded?: { auto: Rect[]; manual: Rect[] }
   object: { coveragePct: number; saturation: number; hue: number; hueName: string; contrast?: number } | null  // contrast: median brightness above the background, levels
   warnings: string[]
 }
@@ -106,7 +109,7 @@ function robustFit(vals: number[], P: Pos[]) {
 interface Tiles { nx: number; ny: number; tw: number; th: number; L: Float64Array; S: Float64Array; C: Float64Array[] }
 
 /** Background per tile: a sigma-clipped median of luminance (stars and the brightest object parts clipped), its noise, and each channel. */
-function tileStats(L: Float32Array, d: Uint8ClampedArray, W: number, H: number): Tiles {
+function tileStats(L: Float32Array, d: Uint8ClampedArray, W: number, H: number, ex: Uint8Array): Tiles {
   const long = 16
   const nx = W >= H ? long : Math.max(4, Math.round((long * W) / H)), ny = W >= H ? Math.max(4, Math.round((long * H) / W)) : long
   const tw = W / nx, th = H / ny
@@ -115,7 +118,8 @@ function tileStats(L: Float32Array, d: Uint8ClampedArray, W: number, H: number):
     const x0 = Math.floor(tx * tw), x1 = Math.floor((tx + 1) * tw), y0 = Math.floor(ty * th), y1 = Math.floor((ty + 1) * th)
     const step = Math.max(1, Math.floor(Math.sqrt(((x1 - x0) * (y1 - y0)) / 2500)))
     let keep: number[] = []
-    for (let y = y0; y < y1; y += step) for (let x = x0; x < x1; x += step) keep.push(y * W + x)
+    for (let y = y0; y < y1; y += step) for (let x = x0; x < x1; x += step) if (!ex[y * W + x]) keep.push(y * W + x)
+    if (keep.length < 20) for (let y = y0; y < y1; y += step) for (let x = x0; x < x1; x += step) keep.push(y * W + x)
     let v = keep.map((i) => L[i]), m = median(v), s = Math.max(mad(v, m), 0.25 / LV)
     for (let it = 0; it < 5; it++) {
       const lo = m - 4 * s, hi = m + 2.5 * s
@@ -256,7 +260,62 @@ const MAX_STARS = 3000
 /** Stars whose wings and surroundings are profiled for halos and rings. */
 const PROFILE_STARS = 120
 
-export function analyze(img: RgbaImage, scale = 1): Review {
+/**
+ * Overlay text (a caption, a watermark, an app's credit line): rows of sharp, bright, low-colour marks shaped like letters
+ * rather than stars, near the edge of the frame. Returns the boxes around each line, in pixels.
+ */
+export function detectOverlay(L: Float32Array, d: Uint8ClampedArray, W: number, H: number) {
+  const N = W * H, M = new Uint8Array(N)
+  let bright = 0
+  for (let i = 0; i < N; i++) {
+    const r = d[4 * i], g = d[4 * i + 1], b = d[4 * i + 2]
+    if (L[i] >= 0.55 && Math.max(r, g, b) - Math.min(r, g, b) <= 48) { M[i] = 1; bright++ }
+  }
+  if (bright > N * 0.2) return []
+  // glyphs: tall enough to read, and hollow or elongated (letters), where stars are round, filled blobs
+  type G = { x0: number; x1: number; y0: number; y1: number; cy: number; h: number }
+  const glyphs: G[] = []
+  for (const c of components(M, W, H)) {
+    if (c.length < 6) continue
+    let x0 = W, x1 = 0, y0 = H, y1 = 0, top = 0
+    for (const j of c) { const x = j % W, y = (j / W) | 0; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (L[j] > top) top = L[j] }
+    const w = x1 - x0 + 1, h = y1 - y0 + 1
+    if (h < 7 || h > H * 0.12 || w > W * 0.3) continue
+    // lettering is filled evenly; a star (spikes and all) peaks in the middle
+    let flat = 0
+    for (const j of c) if (L[j] >= 0.85 * top) flat++
+    if (flat < 0.5 * c.length) continue
+    const fill = c.length / (w * h), aspect = Math.max(w, h) / Math.min(w, h)
+    if (fill < 0.55 || aspect > 2.2) glyphs.push({ x0, x1, y0, y1, cy: (y0 + y1) / 2, h })
+  }
+  // lines: glyphs of similar height side by side
+  glyphs.sort((a, b) => a.x0 - b.x0)
+  const parent = glyphs.map((_, i) => i)
+  const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])))
+  for (let i = 0; i < glyphs.length; i++) for (let j = i + 1; j < glyphs.length; j++) {
+    const a = glyphs[i], b = glyphs[j], hm = Math.max(a.h, b.h)
+    if (b.x0 - a.x1 > 2.2 * hm) break
+    if (Math.abs(a.cy - b.cy) < 0.5 * hm && Math.max(a.h, b.h) / Math.min(a.h, b.h) < 2.5) parent[find(j)] = find(i)
+  }
+  const lines = new Map<number, G[]>()
+  glyphs.forEach((g, i) => { const k = find(i); lines.set(k, [...(lines.get(k) ?? []), g]) })
+  const boxes: { x0: number; y0: number; x1: number; y1: number }[] = []
+  for (const gs of lines.values()) {
+    if (gs.length < 4) continue
+    // one typeface size per line (capitals, x-height and descenders stay within a factor of ~2)
+    const hs = gs.map((g) => g.h).sort((a, b) => a - b)
+    if (hs[Math.floor(hs.length * 0.9)] > 2.2 * hs[Math.floor(hs.length * 0.1)]) continue
+    const x0 = Math.min(...gs.map((g) => g.x0)), x1 = Math.max(...gs.map((g) => g.x1)), y0 = Math.min(...gs.map((g) => g.y0)), y1 = Math.max(...gs.map((g) => g.y1))
+    const cy = (y0 + y1) / 2, cx = (x0 + x1) / 2
+    // captions and watermarks sit near an edge
+    if (!(cy < H * 0.3 || cy > H * 0.7 || cx < W * 0.2 || cx > W * 0.8)) continue
+    const pad = Math.max(4, Math.round(0.5 * (y1 - y0)))
+    boxes.push({ x0: Math.max(0, x0 - pad), y0: Math.max(0, y0 - pad), x1: Math.min(W - 1, x1 + pad), y1: Math.min(H - 1, y1 + pad) })
+  }
+  return boxes
+}
+
+export function analyze(img: RgbaImage, scale = 1, manual: Rect[] = []): Review {
   const { width: W, height: H, data: d } = img
   const N = W * H
   const warnings: string[] = []
@@ -268,8 +327,18 @@ export function analyze(img: RgbaImage, scale = 1): Review {
   for (let i = 0; i < N; i += Math.max(1, Math.floor(N / 20000))) { sampled++; if (Math.abs(d[4 * i] - d[4 * i + 1]) <= 2 && Math.abs(d[4 * i + 2] - d[4 * i + 1]) <= 2) grey++ }
   const mono = grey >= 0.99 * sampled
 
+  // left out: overlay text found in the image, and areas the user marked
+  const ex = new Uint8Array(N)
+  const autoBoxes = detectOverlay(L, d, W, H)
+  const mark = (x0: number, y0: number, x1: number, y1: number) => { for (let y = Math.max(0, y0); y <= Math.min(H - 1, y1); y++) ex.fill(1, y * W + Math.max(0, x0), y * W + Math.min(W - 1, x1) + 1) }
+  for (const b of autoBoxes) mark(b.x0, b.y0, b.x1, b.y1)
+  for (const m of manual) mark(Math.floor(m.x * W), Math.floor(m.y * H), Math.ceil((m.x + m.w) * W), Math.ceil((m.y + m.h) * H))
+  let nEx = 0
+  for (let i = 0; i < N; i++) nEx += ex[i]
+  const Nk = Math.max(1, N - nEx)
+
   // background: tile medians, then a smooth surface through the tiles that are background rather than object
-  const T = tileStats(L, d, W, H)
+  const T = tileStats(L, d, W, H, ex)
   const nT = T.nx * T.ny
   const P: Pos[] = Array.from({ length: nT }, (_, t) => {
     const u = (((t % T.nx) + 0.5) * T.tw - W / 2) / (W / 2), v = ((Math.floor(t / T.nx) + 0.5) * T.th - H / 2) / (H / 2)
@@ -296,7 +365,7 @@ export function analyze(img: RgbaImage, scale = 1): Review {
   const grid = Array.from({ length: T.ny }, (_, ty) => Array.from({ length: T.nx }, (_, tx) => { const t = ty * T.nx + tx; return objectTile[t] ? null : (T.L[t] - level) * LV }))
 
   const tileOf = (x: number, y: number) => Math.min(T.ny - 1, Math.floor(y / T.th)) * T.nx + Math.min(T.nx - 1, Math.floor(x / T.tw))
-  const isBg = (x: number, y: number, i: number) => { const t = tileOf(x, y); return inl[t] && L[i] <= T.L[t] + 3 * T.S[t] && L[i] >= T.L[t] - 4 * T.S[t] }
+  const isBg = (x: number, y: number, i: number) => { const t = tileOf(x, y); return !ex[i] && inl[t] && L[i] <= T.L[t] + 3 * T.S[t] && L[i] >= T.L[t] - 4 * T.S[t] }
 
   // noise at the pixel scale, at 4 px (blotches) and in colour at 2 px
   const fine = lapNoise(L, W, H, (x, y) => isBg(x, y, y * W + x))
@@ -325,6 +394,7 @@ export function analyze(img: RgbaImage, scale = 1): Review {
     interpRow(T.L, T, y, rowBg, scratch)
     for (let x = 0; x < W; x++) {
       const i = y * W + x, r = d[4 * i], g = d[4 * i + 1], b = d[4 * i + 2]
+      if (ex[i]) continue
       const mn = Math.min(r, g, b), mx = Math.max(r, g, b)
       if (mn <= 1) { blackAny++; if (r <= 1) black[0]++; if (g <= 1) black[1]++; if (b <= 1) black[2]++ }
       if (mx >= 254) {
@@ -354,7 +424,7 @@ export function analyze(img: RgbaImage, scale = 1): Review {
   }
   const whiteBlobs = components(whiteMask, W, H).map((c) => c.length)
   const extendedArea = Math.max(600, N * 5e-4)
-  const pct = (n: number) => (100 * n) / N
+  const pct = (n: number) => (100 * n) / Nk
 
   // stars: local maxima well above the local background, brightest first
   const sigmaAt = (x: number, y: number) => interp(T.S, T, x, y)
@@ -364,7 +434,7 @@ export function analyze(img: RgbaImage, scale = 1): Review {
     interpRow(T.L, T, y, rowBg, scratch)
     for (let x = 2; x < W - 2; x++) {
       const i = y * W + x, v = L[i]
-      if (v < minTile + 0.03) continue
+      if (v < minTile + 0.03 || ex[i]) continue
       if (!(v > L[i - 1] && v > L[i - W - 1] && v > L[i - W] && v > L[i - W + 1] && v >= L[i + 1] && v >= L[i + W - 1] && v >= L[i + W] && v >= L[i + W + 1])) continue
       const amp = v - rowBg[x]
       if (amp > Math.max(6 * sigmaAt(x, y), 0.03)) cand.push({ i, amp })
@@ -382,13 +452,13 @@ export function analyze(img: RgbaImage, scale = 1): Review {
     if (claimed[i]) continue
     const x0 = i % W, y0 = (i / W) | 0
     const b = interp(T.L, T, x0, y0), s = sigmaAt(x0, y0), amp = L[i] - b, half = b + amp / 2
-    const core = grow(i, W, H, 24, (j) => L[j] >= half, visHalf)
+    const core = grow(i, W, H, 24, (j) => L[j] >= half && !ex[j], visHalf)
     for (const j of core.px) claimed[j] = 1
     if (core.edge || core.px.length < 3) continue
     let sat = false
     for (const j of core.px) if (Math.max(d[4 * j], d[4 * j + 1], d[4 * j + 2]) >= 254) sat = true
     // centroid and shape from brightness-weighted moments down to a quarter of the peak: sub-pixel, so small stars aren't biased
-    const wide = grow(i, W, H, 24, (j) => L[j] >= b + amp / 4, visHalf).px
+    const wide = grow(i, W, H, 24, (j) => L[j] >= b + amp / 4 && !ex[j], visHalf).px
     let sw0 = 0, mx = 0, my = 0
     for (const j of wide) { const w = L[j] - b; sw0 += w; mx += w * (j % W); my += w * ((j / W) | 0) }
     mx /= sw0; my /= sw0
@@ -406,7 +476,7 @@ export function analyze(img: RgbaImage, scale = 1): Review {
     }
     // the visible disc: everything clearly above the background
     const vis = b + Math.max(4 * s, 0.04)
-    const disc2 = vis < half ? grow(i, W, H, 60, (j) => L[j] >= vis, visFoot).px : core.px
+    const disc2 = vis < half ? grow(i, W, H, 60, (j) => L[j] >= vis && !ex[j], visFoot).px : core.px
     for (const j of disc2) foot[j] = 1
     const rF = Math.sqrt(disc2.length / Math.PI)
     const bgC = [0, 1, 2].map((c) => chanAt(c, mx, my))
@@ -453,6 +523,7 @@ export function analyze(img: RgbaImage, scale = 1): Review {
   const chans = mono ? [1] : [0, 1, 2]
   for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
     const i = y * W + x
+    if (ex[i]) continue
     for (const c of chans) {
       const v = d[4 * i + c]
       if (v < d[4 * (i - 1) + c] + 30) continue
@@ -472,7 +543,7 @@ export function analyze(img: RgbaImage, scale = 1): Review {
   const Ls = new Float32Array(sn), Cs = [0, 1, 2].map(() => new Float32Array(sn)), sf = new Float32Array(sn)
   for (let y = 0; y < sh * k; y++) for (let x = 0; x < sw * k; x++) {
     const i = y * W + x, o = ((y / k) | 0) * sw + ((x / k) | 0)
-    Ls[o] += L[i]; sf[o] += foot[i]
+    Ls[o] += L[i]; sf[o] += foot[i] | ex[i]
     for (let c = 0; c < 3; c++) Cs[c][o] += d[4 * i + c]
   }
   const res = new Float32Array(sn), sInl = new Uint8Array(sn)
@@ -494,6 +565,7 @@ export function analyze(img: RgbaImage, scale = 1): Review {
   for (let o = 0; o < sn; o++) dark[o] = smooth[o] < -Math.max(3 * sigSm, 1.5 / LV) ? 1 : 0
   const dust: DustSpot[] = []
   for (const c of components(dark, sw, sh)) {
+    if (c.some((o) => sf[o] > 0.5)) continue
     if (c.length < 6 || c.length > 0.03 * sn) continue
     let x0 = sw, x1 = 0, y0 = sh, y1 = 0, deepest = 0, cx = 0, cy = 0
     for (const o of c) { const x = o % sw, y = Math.floor(o / sw); x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); deepest = Math.min(deepest, smooth[o]); cx += x; cy += y }
@@ -576,8 +648,10 @@ export function analyze(img: RgbaImage, scale = 1): Review {
   if (N < 500000) warnings.push('The image is small, so star and noise measurements are rough. Review the full-size export if you have it.')
 
   const g3 = (pick: (c: { f: number[]; e: number[] }) => number[]) => [0, 1, 2].map((r) => [0, 1, 2].map((c) => { const v = pick(cell[r * 3 + c]); return v.length >= 3 ? median(v) : null }))
+  const asRect = (b: { x0: number; y0: number; x1: number; y1: number }): Rect => ({ x: b.x0 / W, y: b.y0 / H, w: (b.x1 - b.x0 + 1) / W, h: (b.y1 - b.y0 + 1) / H })
   return {
     version: 1,
+    excluded: autoBoxes.length || manual.length ? { auto: autoBoxes.map(asRect), manual } : undefined,
     image: { width: W, height: H, scale, mono },
     background: {
       level: level * LV, colour: colourBg, cast: colourBg && castSpread > 2.5 ? castName(colourBg) : null, castSpread, grid, objectPct: (100 * objectTile.filter(Boolean).length) / nT, reliable,
@@ -594,7 +668,7 @@ export function analyze(img: RgbaImage, scale = 1): Review {
       colour: chromas.length >= 10 ? { chroma: median(chromas), whitePct: (100 * chromas.filter((c) => c < 0.1).length) / chromas.length, redBlue: median(rbs), redBlueSpread: mad(rbs), green: median(greens) } : null,
       halo: profiled >= 8 ? { blue: blueEx.length ? median(blueEx) : 0, bluePct: blueEx.length ? (100 * blueEx.filter((v) => v > 0.03).length) / blueEx.length : 0, ringPct: (100 * ringN) / profiled, measured: profiled } : null,
     },
-    artefacts: { dust: dust.slice(0, 12), ampGlow, banding: { rows: rb.amp, rowsRatio: rb.ratio, cols: cb.amp, colsRatio: cb.ratio }, streaks, specksPerMp: specks / (N / 1e6) },
+    artefacts: { dust: dust.slice(0, 12), ampGlow, banding: { rows: rb.amp, rowsRatio: rb.ratio, cols: cb.amp, colsRatio: cb.ratio }, streaks, specksPerMp: specks / (Nk / 1e6) },
     object,
     warnings,
   }

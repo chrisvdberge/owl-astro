@@ -78,6 +78,8 @@ Reviews of the same target can be compared side by side (`ReviewCompare.tsx`): e
 taken relative to the object's brightness above the background so different stretches compare fairly.
 Signed in, each review is saved to the account: the result in `image_reviews` and the image in the private `reviews` storage
 bucket under `<user id>/` (the original up to 24 MB, else the reviewed copy as JPEG). Signed out, reviews are kept on the device.
+Overlay text (captions, watermarks, an app's credit line) is found as rows of flat-filled, letter-shaped bright marks near the
+edges and left out of every measurement; "Ignore an area…" lets you box anything else (a logo, a frame) and reviews again.
 When the object fills the frame, the background and calibration checks are skipped. The checks and their rules of thumb are in
 `app/src/lib/review.ts`; it is pure TypeScript, so it runs under Node for tests.
 

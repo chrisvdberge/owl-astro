@@ -68,6 +68,8 @@ aren't object and reports:
 - **Object**: its colour.
 - **Calibration leftovers**: dust motes, amp glow, banding, walking noise and hot pixels.
 
+Signed in, each review is saved to the account: the result in `image_reviews` and the image in the private `reviews` storage
+bucket under `<user id>/` (the original up to 24 MB, else the reviewed copy as JPEG). Signed out, reviews are kept on the device.
 When the object fills the frame, the background and calibration checks are skipped. The checks and their rules of thumb are in
 `app/src/lib/review.ts`; it is pure TypeScript, so it runs under Node for tests.
 

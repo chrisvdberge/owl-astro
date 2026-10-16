@@ -1,17 +1,19 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { User } from '@supabase/supabase-js'
+import { extraObject, isCustom, type CatObject } from '../lib/catalog'
 import { AREAS, analyze, notes, type Review } from '../lib/review'
+import { NotSetUp, deleteReview, imageUrl, listReviews, loadLocal, saveLocal, saveReview, uploadBlob, type SavedReview } from '../lib/reviews'
 import { Link } from '../lib/router'
+import type { useStore } from '../lib/store'
+import { supabase } from '../lib/sync'
 import { Grid, Stat } from './Inspector'
 
-const HIST_KEY = 'astroplanner.review.history'
+type Store = ReturnType<typeof useStore>
 /** Larger images are scaled down to this many pixels before review: plenty for every check, and phones keep up. */
 const MAX_PIXELS = 12e6
-interface Saved { id: string; at: string; name: string; thumb: string; result: Review }
-const loadHist = (): Saved[] => { try { return JSON.parse(localStorage.getItem(HIST_KEY) ?? '[]') } catch { return [] } }
-const saveHist = (h: Saved[]) => { try { localStorage.setItem(HIST_KEY, JSON.stringify(h)) } catch { /* storage full or unavailable */ } }
 
 /** Decode in the browser and hand the pixels to the worker (or review here when workers are unavailable). */
-async function review(file: File): Promise<{ result: Review; thumb: string }> {
+async function review(file: File): Promise<{ result: Review; thumb: string; scaled: () => Promise<Blob> }> {
   let bmp: ImageBitmap
   try { bmp = await createImageBitmap(file) } catch {
     throw new Error('This browser can\'t open that file. Export a JPEG or PNG (browsers don\'t read FITS, and most not 16-bit TIFF).')
@@ -28,43 +30,93 @@ async function review(file: File): Promise<{ result: Review; thumb: string }> {
   th.getContext('2d')!.drawImage(bmp, 0, 0, th.width, th.height)
   const thumb = th.toDataURL('image/jpeg', 0.75)
   bmp.close()
+  // the reviewed copy, for files too large to store as they are
+  const scaled = () => new Promise<Blob>((resolve, reject) => cv.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not encode the image.'))), 'image/jpeg', 0.92))
   let worker: Worker
   try { worker = new Worker(new URL('../lib/review.worker.ts', import.meta.url), { type: 'module' }) } catch {
-    return { result: analyze(px, scale), thumb }
+    return { result: analyze(px, scale), thumb, scaled }
   }
   const result = await new Promise<Review>((resolve, reject) => {
     worker.onmessage = (e: MessageEvent<{ ok: boolean; review?: Review; error?: string }>) => (e.data.ok ? resolve(e.data.review!) : reject(new Error(e.data.error)))
     worker.onerror = (e) => reject(new Error(e.message || 'The review failed.'))
     worker.postMessage({ width: w, height: h, data: px.data.buffer, scale }, [px.data.buffer])
   }).finally(() => worker.terminate())
-  return { result, thumb }
+  return { result, thumb, scaled }
 }
 
 const TONE_MARK = { ok: '✓', info: 'i', warn: '!', bad: '!!' } as const
 
 /** Script review of a finished image: background, noise, clipping, stars, colour and calibration leftovers, from the pixels alone. */
-export default function ImageReview() {
+export default function ImageReview({ user, store, catalog }: { user: User | null; store: Store; catalog: CatObject[] }) {
+  const db = user ? supabase : null
   const [busy, setBusy] = useState(false)
+  const [saving, setSaving] = useState<'' | 'saving' | 'saved'>('')
   const [err, setErr] = useState('')
-  const [cur, setCur] = useState<{ name: string; src: string; result: Review } | null>(null)
-  const [hist, setHist] = useState<Saved[]>(loadHist)
+  const [setUp, setSetUp] = useState(true)
+  const [cur, setCur] = useState<{ id: string; name: string; src: string; result: Review; targetId?: string } | null>(null)
+  const [local, setLocal] = useState<SavedReview[]>(loadLocal)
+  const [remote, setRemote] = useState<{ uid: string; list: SavedReview[] } | null>(null)
+  const [targetId, setTargetId] = useState('')
   const [drag, setDrag] = useState(false)
   const input = useRef<HTMLInputElement>(null)
   const objUrl = useRef('')
   useEffect(() => () => { if (objUrl.current) URL.revokeObjectURL(objUrl.current) }, [])
+  // signed in: the account's reviews; signed out (or before the migration is applied): the ones on this device
+  useEffect(() => {
+    if (!db || !user) return
+    let live = true
+    listReviews(db).then((list) => { if (live) setRemote({ uid: user.id, list }) }).catch((e) => { if (!live) return; if (e instanceof NotSetUp) setSetUp(false); else setErr(`Couldn't load your saved reviews: ${e.message ?? e}`) })
+    return () => { live = false }
+  }, [db, user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  const inAccount = !!db && setUp
+  const hist = inAccount ? (remote?.uid === user?.id ? remote?.list ?? [] : []) : local
+
+  const byId = useMemo(() => new Map(catalog.map((o) => [o.id, o])), [catalog])
+  const targets = useMemo(() => store.wishlist.flatMap((w) => {
+    const o = byId.get(w.id) ?? extraObject(w)
+    return o ? [{ id: w.id, label: isCustom(w.id) ? o.names[0] : o.m ?? o.id }] : []
+  }), [store.wishlist, byId])
+  const nameOf = (id?: string) => targets.find((t) => t.id === id)?.label
 
   const run = async (file: File) => {
-    setBusy(true); setErr('')
+    setBusy(true); setErr(''); setSaving('')
     try {
-      const { result, thumb } = await review(file)
+      const { result, thumb, scaled } = await review(file)
       if (objUrl.current) URL.revokeObjectURL(objUrl.current)
       objUrl.current = URL.createObjectURL(file)
-      setCur({ name: file.name, src: objUrl.current, result })
-      const next = [{ id: crypto.randomUUID(), at: new Date().toISOString(), name: file.name, thumb, result }, ...hist].slice(0, 12)
-      setHist(next); saveHist(next)
+      const rec = { id: crypto.randomUUID(), at: new Date().toISOString(), name: file.name, targetId: targetId || undefined, thumb, result }
+      setCur({ id: rec.id, name: file.name, src: objUrl.current, result, targetId: rec.targetId })
+      setBusy(false)
+      if (db && user && setUp) {
+        setSaving('saving')
+        try {
+          const { blob, ext } = await uploadBlob(file, scaled)
+          const saved = await saveReview(db, user.id, rec, blob, ext)
+          setRemote((r) => ({ uid: user.id, list: [saved, ...(r?.uid === user.id ? r.list : [])] })); setSaving('saved')
+          return
+        } catch (e) {
+          setSaving('')
+          if (e instanceof NotSetUp) setSetUp(false)
+          else { setErr(`The review couldn't be saved to your account (${e instanceof Error ? e.message : String(e)}); it is kept on this device.`) }
+        }
+      }
+      setLocal((h) => { const next = [rec, ...h].slice(0, 12); saveLocal(next); return next })
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
   }
-  const remove = (id: string) => { const next = hist.filter((h) => h.id !== id); setHist(next); saveHist(next) }
+  const open = async (h: SavedReview) => {
+    setCur({ id: h.id, name: h.name, src: h.thumb, result: h.result, targetId: h.targetId }); setSaving('')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    if (db && h.path) {
+      try { const url = await imageUrl(db, h.path); setCur((c) => (c?.id === h.id ? { ...c, src: url } : c)) } catch { /* the thumbnail stays */ }
+    }
+  }
+  const remove = async (h: SavedReview) => {
+    if (h.path) {
+      if (!db || !window.confirm(`Delete the review of ${h.name} and its image from your account?`)) return
+      try { await deleteReview(db, h); setRemote((r) => r && { ...r, list: r.list.filter((x) => x.id !== h.id) }) } catch (e) { setErr(`Couldn't delete: ${e instanceof Error ? e.message : String(e)}`) }
+    } else setLocal((l) => { const next = l.filter((x) => x.id !== h.id); saveLocal(next); return next })
+    if (cur?.id === h.id) setCur(null)
+  }
 
   const r = cur?.result
   const list = r ? notes(r) : []
@@ -73,7 +125,7 @@ export default function ImageReview() {
   return (
     <div className="insp">
       <div className="ch wrap"><h2 className="th">Image review <small>background · noise · stars · colour · calibration</small></h2></div>
-      <p className="note">Checks a finished (stretched) image in your browser; nothing is uploaded. Use a JPEG, PNG or WebP at full size. To measure a linear stack, use the <Link to="/tools/inspector">Image inspector</Link>.</p>
+      <p className="note">Checks a finished (stretched) image: use a JPEG, PNG or WebP at full size. {inAccount ? 'The image and its review are saved to your account.' : user && !setUp ? 'Saving to your account isn\'t set up on this server yet, so reviews are kept on this device.' : <><Link to="/account">Sign in</Link> to save images and reviews to your account; until then they're kept on this device.</>} To measure a linear stack, use the <Link to="/tools/inspector">Image inspector</Link>.</p>
 
       <div className={`idrop ${drag ? 'over' : ''}`}
         onDragOver={(e) => { e.preventDefault(); setDrag(true) }} onDragLeave={() => setDrag(false)}
@@ -82,11 +134,15 @@ export default function ImageReview() {
         <input ref={input} type="file" accept="image/jpeg,image/png,image/webp,image/tiff,.jpg,.jpeg,.png,.webp,.tif,.tiff" hidden onChange={(e) => { const f0 = e.target.files?.[0]; if (f0) run(f0); e.target.value = '' }} />
         {busy ? 'Reviewing… a large image takes a few seconds.' : 'Drop a processed image here, or click to choose'}
       </div>
+      <label className="f inl"><span>Target</span>
+        <select value={targetId} onChange={(e) => setTargetId(e.target.value)}>
+          <option value="">— none —</option>{targets.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+        </select></label>
       {err && <p className="nmsg">{err}</p>}
 
       {cur && r && b && s && (
         <>
-          <h3>{cur.name} <small>{Math.round(r.image.width / r.image.scale)}×{Math.round(r.image.height / r.image.scale)}{r.image.mono ? ', mono' : ''} · {issues ? `${issues} thing${issues > 1 ? 's' : ''} to look at` : 'nothing obvious to fix'}</small></h3>
+          <h3>{cur.name}{nameOf(cur.targetId) ? ` · ${nameOf(cur.targetId)}` : ''} <small>{saving === 'saving' ? 'saving… · ' : saving === 'saved' ? 'saved to your account · ' : ''}{Math.round(r.image.width / r.image.scale)}×{Math.round(r.image.height / r.image.scale)}{r.image.mono ? ', mono' : ''} · {issues ? `${issues} thing${issues > 1 ? 's' : ''} to look at` : 'nothing obvious to fix'}</small></h3>
           <div className="rvtop">
             <figure className="rvimg">
               <img src={cur.src} alt="" />
@@ -125,17 +181,17 @@ export default function ImageReview() {
 
       {hist.length > 0 && (
         <>
-          <h3>Recent reviews</h3>
+          <h3>{inAccount ? 'Saved reviews' : 'Recent reviews on this device'}</h3>
           <div className="ihist">
             {hist.map((h) => {
               const n = notes(h.result).filter((x) => x.tone === 'warn' || x.tone === 'bad').length
               return (
                 <div key={h.id} className="ihrow">
                   <img src={h.thumb} alt="" className="rvthumb" />
-                  <button onClick={() => setCur({ name: h.name, src: h.thumb, result: h.result })}><b>{h.name}</b>
-                    <small>{new Date(h.at).toLocaleDateString()}</small></button>
+                  <button onClick={() => open(h)}><b>{h.name}</b>
+                    <small>{new Date(h.at).toLocaleDateString()}{nameOf(h.targetId) ? ` · ${nameOf(h.targetId)}` : ''}</small></button>
                   <span>{n ? `${n} to look at` : 'all clear'}</span>
-                  <button onClick={() => remove(h.id)} aria-label="Remove">✕</button>
+                  <button onClick={() => remove(h)} aria-label="Delete">✕</button>
                 </div>
               )
             })}

@@ -1038,7 +1038,7 @@ export default function App() {
       {view === 'plan' && <main className="pmain"><div className="subnav"><h2 className="th">Plan <small>the year ahead for your targets</small></h2></div><Planner mode="calendar" store={store} catalog={catalog} onShow={show} onDetails={setDetail} onLog={setObs} /></main>}
       {view === 'log' && <main className="pmain"><Observations store={store} catalog={catalog} onDetails={setDetail} onAdd={() => setObs({})} onEdit={setObs} /></main>}
       {view === 'inspector' && <main className="pmain"><Inspector store={store} catalog={catalog} scope={defaultScope} /></main>}
-      {view === 'review' && <main className="pmain"><ImageReview /></main>}
+      {view === 'review' && <main className="pmain"><ImageReview user={auth.user} store={store} catalog={catalog} /></main>}
       {view === 'iso' && <main className="pmain"><BestIso store={store} cameraId={route.path[2]} /></main>}
       {view === 'gain' && <main className="pmain"><BestGain store={store} cameraId={route.path[2]} /></main>}
       {section === 'account' && (

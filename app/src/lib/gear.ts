@@ -15,15 +15,16 @@ export function setupLabel(optics: Optics, presetId?: string): string {
 
 /**
  * Searchable names for the gear in use: the all-in-one unit, else the telescope and camera when they are named models
- * (generic entries such as "Newton 200/1000" or "Lens 135 mm" would only add noise to a search).
+ * (generic entries such as "Newton 200/1000", "Lens 135 mm" or a bare sensor would only add noise to a search).
  */
 export function gearNames(optics: Optics, presetId?: string): string[] {
   const unit = PRESETS.find((p) => p.id === presetId && p.id !== 'custom')
   if (unit) return [bare(unit.label)]
   const scope = SCOPES.find((t) => !/^(lens|newton)-/.test(t.id) && near(t.apertureMm, optics.apertureMm) && near(t.focalLengthMm, optics.focalLengthMm))
   const cam = findCamera(optics)
+  const named = cam && !cam.id.startsWith('sensor-') ? cam : undefined
   // "ZWO ASI2600MC/MM Pro" → "ZWO ASI2600MC Pro": one model per name, as AstroBin lists them
-  return [scope && bare(scope.label), cam && bare(cam.label).replace(/\/\w+/g, '')].filter((x): x is string => !!x)
+  return [scope && bare(scope.label), named && bare(named.label).replace(/\/\w+/g, '')].filter((x): x is string => !!x)
 }
 
 /** Names offered when logging an observation: the all-in-one units. */

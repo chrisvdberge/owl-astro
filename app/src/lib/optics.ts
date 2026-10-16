@@ -59,6 +59,9 @@ export const PRESETS: Preset[] = [
 export interface Camera { id: string; label: string; sensorWmm: number; sensorHmm: number; pixelUm: number; qe: number; readNoise: number; fullWell: number; bits: number }
 export const CAMERAS: Camera[] = [
   { id: 'zwo-asi533mc', label: 'ZWO ASI533MC Pro (1″, 3008²)', sensorWmm: 11.31, sensorHmm: 11.31, pixelUm: 3.76, qe: 0.8, readNoise: 1.5, fullWell: 50000, bits: 14 },
+  // generic entry for any camera built around the Sony IMX585 (Player One Uranus-C, SVBony SV705C, QHY5III585, ToupTek, …);
+  // the exact sensor size keeps it apart from the ZWO entry when looking a camera up by its figures
+  { id: 'sensor-imx585', label: 'Sony IMX585 sensor (any camera, 1/1.2″, 3840×2160)', sensorWmm: 11.136, sensorHmm: 6.264, pixelUm: 2.9, qe: 0.7, readNoise: 1.2, fullWell: 40000, bits: 12 },
   { id: 'zwo-asi585mc', label: 'ZWO ASI585MC (1/1.2″, 3840×2160)', sensorWmm: 11.14, sensorHmm: 6.26, pixelUm: 2.9, qe: 0.7, readNoise: 1.2, fullWell: 40000, bits: 12 },
   { id: 'zwo-asi294mc', label: 'ZWO ASI294MC Pro (4/3″)', sensorWmm: 19.1, sensorHmm: 13, pixelUm: 4.63, qe: 0.75, readNoise: 1.6, fullWell: 63700, bits: 14 },
   { id: 'zwo-asi2600', label: 'ZWO ASI2600MC/MM Pro (APS-C)', sensorWmm: 23.5, sensorHmm: 15.7, pixelUm: 3.76, qe: 0.8, readNoise: 2.0, fullWell: 50000, bits: 16 },

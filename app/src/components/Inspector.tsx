@@ -21,7 +21,7 @@ const shade = (v: number | null, med: number, span: number) => {
   return t >= 0 ? `rgba(251,191,36,${0.12 + 0.55 * t})` : `rgba(56,189,248,${0.12 + 0.55 * -t})`
 }
 
-function Grid({ title, rows, fmt, med, span, note }: { title: string; rows: (number | null)[][]; fmt: (v: number) => string; med: number; span: number; note?: string }) {
+export function Grid({ title, rows, fmt, med, span, note }: { title: string; rows: (number | null)[][]; fmt: (v: number) => string; med: number; span: number; note?: string }) {
   return (
     <div className="igrid">
       <h4>{title}</h4>
@@ -33,7 +33,7 @@ function Grid({ title, rows, fmt, med, span, note }: { title: string; rows: (num
   )
 }
 
-const Stat = ({ k, v, s }: { k: string; v: string; s?: string }) => <div className="istat"><small>{k}</small><b>{v}</b>{s && <small>{s}</small>}</div>
+export const Stat = ({ k, v, s }: { k: string; v: string; s?: string }) => <div className="istat"><small>{k}</small><b>{v}</b>{s && <small>{s}</small>}</div>
 
 /** Inspect a standalone image (stack or single frame) with the local `astroinspect` service. */
 export default function Inspector({ store, catalog, scope }: { store: Store; catalog: CatObject[]; scope: Scope }) {

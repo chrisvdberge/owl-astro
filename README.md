@@ -56,6 +56,21 @@ longest sub, the one with the most dynamic range wins, else the high-conversion-
 model (site Bortle, the camera's scope from My gear, filter, colour or mono). Read noise and full well per gain are approximated from
 the makers' charts in `app/src/lib/gain.ts`.
 
+## Image review
+
+Tools → Image review (`/tools/review`) gives feedback on a finished (stretched) JPEG, PNG or WebP image from its pixels alone, in the browser
+(a Web Worker; nothing is uploaded, no gear or exposure info needed). It fits a smooth background surface through the tiles that
+aren't object and reports:
+- **Background**: level, colour cast and gradients (linear, or radial like vignetting or flats that over-correct).
+- **Noise**: at pixel and 4 px scale, colour noise, and histogram gaps from stretching in 8-bit.
+- **Clipping**: black and white, per channel.
+- **Stars**: size and roundness across the field, how much of the frame they cover, colour, blue halos and dark rings.
+- **Object**: its colour.
+- **Calibration leftovers**: dust motes, amp glow, banding, walking noise and hot pixels.
+
+When the object fills the frame, the background and calibration checks are skipped. The checks and their rules of thumb are in
+`app/src/lib/review.ts`; it is pure TypeScript, so it runs under Node for tests.
+
 ## Catalog
 
 `app/public/catalog.json` is generated: `node app/scripts/fetch-catalogs.mjs` downloads the extra catalogs into

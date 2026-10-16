@@ -225,6 +225,16 @@ details.more { margin-top: 8px; } details.more summary { cursor: pointer; color:
 .igrids { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; } .igrid h4 { margin: 0 0 6px; font-size: 13px; color: var(--mute); font-weight: 600; }
 .igrid > div { display: grid; gap: 2px; } .igrid > div span { padding: 10px 0; text-align: center; font-size: 12.5px; border-radius: 4px; background-clip: padding-box; border: 1px solid var(--line); }
 .ihist { display: grid; gap: 4px; } .ihrow { display: flex; align-items: center; gap: 10px; background: var(--panel); border-radius: 8px; padding: 4px 10px; } .ihrow > button:first-child { flex: 1; text-align: left; border: 0; background: none; display: grid; } .ihrow small { color: var(--mute); } .ihrow > span { color: var(--mute); font-size: 12.5px; }
+/* image review */
+.rvtop { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: start; margin-bottom: 6px; }
+.rvimg { position: relative; margin: 0; } .rvimg img { display: block; width: 100%; border-radius: 10px; }
+.rvimg svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; } .rvimg ellipse { fill: none; stroke: var(--warn); stroke-width: 3; vector-effect: non-scaling-stroke; pointer-events: all; }
+.rvarea h4 { margin: 14px 0 0; font-size: 13px; color: var(--mute); font-weight: 600; } .rvarea .ifind { margin: 6px 0; }
+.ifind li i { font-style: normal; font-weight: 700; font-size: 12px; display: inline-block; min-width: 20px; color: var(--mute); }
+.ifind li.ok i { color: var(--ok); } .ifind li.warn i { color: var(--warn); } .ifind li.bad i { color: var(--bad); } .ifind li.info { border-color: var(--acc); } .ifind li.info i { color: var(--acc); }
+.rvthumb { width: 54px; height: 36px; object-fit: cover; border-radius: 4px; }
+@media (max-width: 800px) { .rvtop { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { .rvtop .istats { grid-template-columns: 1fr 1fr; } .rvgrids .igrid > div span { font-size: 9px; padding: 6px 0; letter-spacing: -0.3px; } }
 @media (max-width: 700px) { .insp .f.inl { grid-template-columns: 60px 1fr; } .istat b { font-size: 20px; } }
 
 /* phones: the page name in the header; the sky view's Setup / Results panels open from floating buttons */

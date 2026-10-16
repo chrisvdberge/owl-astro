@@ -30,6 +30,7 @@ import Observations from './components/Observations'
 import Inspector from './components/Inspector'
 import BestIso from './components/BestIso'
 import BestGain from './components/BestGain'
+import ImageReview from './components/ImageReview'
 import GearPlanner from './components/GearPlanner'
 import SiteView from './components/SiteView'
 import AccountHome from './components/AccountHome'
@@ -42,7 +43,7 @@ import { defaultPatch, gearNames, setupLabel } from './lib/gear'
 import { analyseSite } from './lib/lightpollution'
 
 
-type View = 'tonight' | 'sky' | 'targets' | 'browse' | 'comets' | 'events' | 'plan' | 'log' | 'gear' | 'sites' | 'inspector' | 'iso' | 'gain' | 'account' | 'mygear' | 'comments'
+type View = 'tonight' | 'sky' | 'targets' | 'browse' | 'comets' | 'events' | 'plan' | 'log' | 'gear' | 'sites' | 'inspector' | 'review' | 'iso' | 'gain' | 'account' | 'mygear' | 'comments'
 const nameOf = (o: CatObject) => (isCustom(o.id) ? o.names[0] : o.m ?? o.id)
 /** One-line summary for identifying an object on the sky: type, magnitude, size. */
 const objFacts = (o: CatObject) => [o.typeName, o.mag != null && `${o.mag.toFixed(1)} mag`, o.maj != null && `${+o.maj.toFixed(1)}′${o.min != null && o.min !== o.maj ? `×${+o.min.toFixed(1)}′` : ''}`].filter(Boolean).join(' · ')
@@ -100,12 +101,12 @@ export default function App() {
   const setTmin = (t: number) => setMoment((m) => ({ ...m, tmin: t }))
   const [mount, setMount] = useState<'altaz' | 'eq'>(() => { try { return localStorage.getItem('astroplanner.mount') === 'eq' ? 'eq' : 'altaz' } catch { return 'altaz' } })
   const minAlt = store.settings.minAlt
-  // the page comes from the URL: /tonight[/date], /sky[/target], /targets[/browse|comets|events], /plan, /log, /account[/gear|sites], /tools/{gear,inspector,iso[/camera],gain[/camera]}
+  // the page comes from the URL: /tonight[/date], /sky[/target], /targets[/browse|comets|events], /plan, /log, /account[/gear|sites], /tools/{gear,inspector,review,iso[/camera],gain[/camera]}
   const route = useRoute()
   const [p0, p1] = route.path
   const view: View = p0 === 'sky' ? 'sky' : p0 === 'targets' ? (p1 === 'browse' ? 'browse' : p1 === 'comets' ? 'comets' : p1 === 'events' ? 'events' : 'targets') : p0 === 'plan' ? 'plan' : p0 === 'log' ? 'log'
-    : p0 === 'account' ? (p1 === 'gear' ? 'mygear' : p1 === 'sites' ? 'sites' : p1 === 'comments' ? 'comments' : 'account') : p0 === 'tools' ? (p1 === 'inspector' ? 'inspector' : p1 === 'iso' ? 'iso' : p1 === 'gain' ? 'gain' : 'gear') : 'tonight'
-  const section = view === 'browse' || view === 'comets' || view === 'events' ? 'targets' : ['account', 'mygear', 'sites', 'comments'].includes(view) ? 'account' : ['gear', 'inspector', 'iso', 'gain'].includes(view) ? 'tools' : view
+    : p0 === 'account' ? (p1 === 'gear' ? 'mygear' : p1 === 'sites' ? 'sites' : p1 === 'comments' ? 'comments' : 'account') : p0 === 'tools' ? (p1 === 'inspector' ? 'inspector' : p1 === 'review' ? 'review' : p1 === 'iso' ? 'iso' : p1 === 'gain' ? 'gain' : 'gear') : 'tonight'
+  const section = view === 'browse' || view === 'comets' || view === 'events' ? 'targets' : ['account', 'mygear', 'sites', 'comments'].includes(view) ? 'account' : ['gear', 'inspector', 'review', 'iso', 'gain'].includes(view) ? 'tools' : view
   // addresses from before the account pages (bookmarks, the installed app)
   useEffect(() => {
     if (p0 !== 'setup') return
@@ -1000,7 +1001,7 @@ export default function App() {
       <header>
         <Link to="/tonight" className="brand"><img src="/favicon.svg" alt="" width={26} height={26} />Owl Astro</Link>
         <nav className="nav">{NAV.map(([id, to, name]) => <Link key={id} to={to} className={section === id ? 'on' : ''}>{name}{id === 'targets' && store.wishlist.length ? <small>{store.wishlist.length}</small> : null}</Link>)}</nav>
-        <span className="here">{view === 'browse' || view === 'comets' || view === 'events' ? 'Targets' : view === 'sites' ? 'My sites' : view === 'mygear' ? 'My gear' : view === 'comments' ? 'Comments' : view === 'account' ? 'Account' : view === 'gear' ? 'Gear planner' : view === 'inspector' ? 'Inspector' : view === 'iso' ? 'Best ISO' : view === 'gain' ? 'Best gain' : NAV.find(([id]) => id === view)?.[2]}</span>
+        <span className="here">{view === 'browse' || view === 'comets' || view === 'events' ? 'Targets' : view === 'sites' ? 'My sites' : view === 'mygear' ? 'My gear' : view === 'comments' ? 'Comments' : view === 'account' ? 'Account' : view === 'gear' ? 'Gear planner' : view === 'inspector' ? 'Inspector' : view === 'review' ? 'Image review' : view === 'iso' ? 'Best ISO' : view === 'gain' ? 'Best gain' : NAV.find(([id]) => id === view)?.[2]}</span>
         <span className="sp" />
         {!online && <span className="offline" title="No connection: planning works, forecasts, survey images and sync resume when you are back online">Offline</span>}
         <SiteSwitcher store={store} />
@@ -1037,6 +1038,7 @@ export default function App() {
       {view === 'plan' && <main className="pmain"><div className="subnav"><h2 className="th">Plan <small>the year ahead for your targets</small></h2></div><Planner mode="calendar" store={store} catalog={catalog} onShow={show} onDetails={setDetail} onLog={setObs} /></main>}
       {view === 'log' && <main className="pmain"><Observations store={store} catalog={catalog} onDetails={setDetail} onAdd={() => setObs({})} onEdit={setObs} /></main>}
       {view === 'inspector' && <main className="pmain"><Inspector store={store} catalog={catalog} scope={defaultScope} /></main>}
+      {view === 'review' && <main className="pmain"><ImageReview /></main>}
       {view === 'iso' && <main className="pmain"><BestIso store={store} cameraId={route.path[2]} /></main>}
       {view === 'gain' && <main className="pmain"><BestGain store={store} cameraId={route.path[2]} /></main>}
       {section === 'account' && (

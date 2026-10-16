@@ -234,6 +234,14 @@ details.more { margin-top: 8px; } details.more summary { cursor: pointer; color:
 .ifind li.ok i { color: var(--ok); } .ifind li.warn i { color: var(--warn); } .ifind li.bad i { color: var(--bad); } .ifind li.info { border-color: var(--acc); } .ifind li.info i { color: var(--acc); }
 .rvform { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; margin: 8px 0; } .rvform summary { cursor: pointer; font-weight: 600; } .rvform summary small { color: var(--mute); font-weight: 400; margin-left: 6px; }
 .rvform > div { display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 8px 12px; margin: 10px 0 4px; align-items: end; } .rvform label { display: grid; gap: 3px; } .rvform label small { color: var(--mute); font-size: 12px; } .rvform select, .rvform input { width: 100%; min-width: 0; } .rvform p.note { margin: 0 0 6px; }
+.tpick { position: relative; display: flex; } .tpick input { flex: 1; } .tclear { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); border: 0; background: none; color: var(--mute); padding: 2px 6px; }
+.tlist { position: absolute; z-index: 20; top: 100%; left: 0; right: 0; margin-top: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; max-height: 260px; overflow-y: auto; display: grid; box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+.tlist button { text-align: left; border: 0; border-radius: 0; background: none; padding: 6px 10px; display: flex; justify-content: space-between; gap: 8px; } .tlist button:hover { background: var(--line); } .tlist small { color: var(--mute); white-space: nowrap; }
+.rvcmpsel { margin: 6px 0 10px; } .insp .rvcmpsel { grid-template-columns: 70px minmax(160px, 420px); } .rvcmpsel select { grid-column: auto; }
+.rvcmp { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; margin: 0 0 14px; } .rvcmp h3 { margin: 4px 0; }
+.rvcmpimg { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } .rvcmpimg figure { margin: 0; } .rvcmpimg img { width: 100%; border-radius: 8px; display: block; } .rvcmpimg figcaption { font-size: 12.5px; margin-top: 4px; overflow-wrap: anywhere; } .rvcmpimg small { color: var(--mute); }
+.rvcmptab { width: 100%; border-collapse: collapse; font-size: 13.5px; } .rvcmptab th, .rvcmptab td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: right; } .rvcmptab td:first-child { text-align: left; color: var(--mute); }
+.rvcmptab td.win { color: var(--ok); font-weight: 600; } .rvcmptab td.lose { color: var(--warn); }
 .rvthumb { width: 54px; height: 36px; object-fit: cover; border-radius: 4px; }
 @media (max-width: 800px) { .rvtop { grid-template-columns: 1fr; } }
 @media (max-width: 700px) { .rvtop .istats { grid-template-columns: 1fr 1fr; } .rvgrids .igrid > div span { font-size: 9px; padding: 6px 0; letter-spacing: -0.3px; } }

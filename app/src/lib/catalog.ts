@@ -105,3 +105,24 @@ export function findBySlug(catalog: CatObject[], slug: string, extra: CatObject[
   const s = slugish(slug)
   return catalog.find((o) => (o.m && slugish(o.m) === s) || slugish(o.id) === s) ?? extra.find((o) => slugish(o.id) === s)
 }
+
+/** An object as "M 42 · Orion Nebula" for pickers. */
+export const targetLabel = (o: CatObject) => `${o.m ?? o.id}${o.names[0] && o.names[0] !== (o.m ?? o.id) ? ` · ${o.names[0]}` : ''}`
+
+const CATALOGUE_ID = /^(m|ngc|ic|sh2|c|b|ldn|lbn|vdb|abell|barnard|caldwell)[-_ ]?\d+$/i
+
+/** A target guessed from a file name like "M42_final.jpg" or "pacman-nebula.png": a catalogue number, else a common name. */
+export function guessTarget(catalog: CatObject[], fileName: string): CatObject | undefined {
+  const words = fileName.replace(/\.[a-z0-9]+$/i, '').split(/[^a-z0-9]+/i).filter(Boolean)
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i], pair = /^[a-z]+$/i.test(w) && /^\d+$/.test(words[i + 1] ?? '') ? w + words[i + 1] : ''
+    for (const t of [pair, w]) if (t && CATALOGUE_ID.test(t)) { const hit = searchCatalog(catalog, t, 1)[0]; if (hit) return hit }
+  }
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const skip = new Set(['final', 'stack', 'stacked', 'image', 'nebula', 'galaxy', 'cluster', 'processed', 'signal', 'export', 'crop', 'cropped', 'version', 'starless', 'stars', 'edit', 'edited', 'screenshot', 'photo'])
+  for (const w of words.filter((x) => x.length >= 5 && !/\d/.test(x) && !skip.has(x.toLowerCase()))) {
+    const hit = catalog.find((o) => o.names.some((n) => norm(n).startsWith(norm(w))))
+    if (hit) return hit
+  }
+  return undefined
+}

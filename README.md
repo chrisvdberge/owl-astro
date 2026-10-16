@@ -73,6 +73,9 @@ whether the image was resized) adds advice in `app/src/lib/reviewSetup.ts`: star
 sampling, elongation explained by the mount, noise against the exposure model's expected signal-to-noise and hours for a good
 result, sub length against the sky, and dual-band filter and Bortle context. A target fills in integration and sub length from the
 observation log; the inputs are saved with the review.
+The target is searched in the whole catalogue (wishlist first) and guessed from the file name ("M42_final.jpg", "pacman.png").
+Reviews of the same target can be compared side by side (`ReviewCompare.tsx`): each measurement with the better one marked, noise
+taken relative to the object's brightness above the background so different stretches compare fairly.
 Signed in, each review is saved to the account: the result in `image_reviews` and the image in the private `reviews` storage
 bucket under `<user id>/` (the original up to 24 MB, else the reviewed copy as JPEG). Signed out, reviews are kept on the device.
 When the object fills the frame, the background and calibration checks are skipped. The checks and their rules of thumb are in

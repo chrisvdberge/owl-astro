@@ -39,7 +39,7 @@ export interface Review {
     streaks: { direction: number; strength: number } | null
     specksPerMp: number
   }
-  object: { coveragePct: number; saturation: number; hue: number; hueName: string } | null
+  object: { coveragePct: number; saturation: number; hue: number; hueName: string; contrast?: number } | null  // contrast: median brightness above the background, levels
   warnings: string[]
 }
 
@@ -557,18 +557,18 @@ export function analyze(img: RgbaImage, scale = 1): Review {
   // the object: clearly brighter than the background surface, not a star
   let object: Review['object'] = null
   if (!mono) {
-    const sats: number[] = []
+    const sats: number[] = [], lift: number[] = []
     let hx = 0, hy = 0, cnt = 0
     for (let o = 0; o < sn; o++) {
       if (res[o] < Math.max(5 * sig, 0.03) || sf[o] >= 0.25 || Ls[o] > 0.97) continue
       cnt++
       const r = Cs[0][o], g = Cs[1][o], b = Cs[2][o], mx = Math.max(r, g, b)
       const sat = mx > 0 ? (mx - Math.min(r, g, b)) / mx : 0, h = (hueOf(r, g, b) * Math.PI) / 180
-      sats.push(sat); hx += sat * Math.cos(h); hy += sat * Math.sin(h)
+      sats.push(sat); lift.push(res[o]); hx += sat * Math.cos(h); hy += sat * Math.sin(h)
     }
     if (cnt >= 0.015 * sn) {
       const hue = ((Math.atan2(hy, hx) * 180) / Math.PI + 360) % 360
-      object = { coveragePct: (100 * cnt) / sn, saturation: median(sats), hue, hueName: hueName(hue) }
+      object = { coveragePct: (100 * cnt) / sn, saturation: median(sats), hue, hueName: hueName(hue), contrast: median(lift) * LV }
     }
   }
 

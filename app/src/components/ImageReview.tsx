@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
-import { extraObject, isCustom, type CatObject } from '../lib/catalog'
+import { extraObject, guessTarget, isCustom, type CatObject } from '../lib/catalog'
 import { AREAS, analyze, notes, type Review } from '../lib/review'
 import { defaultFilter, type Filter } from '../lib/exposure'
 import { gearDefaultFirst, gearName, setupLabel, type GearItem } from '../lib/gear'
@@ -12,6 +12,8 @@ import { Link } from '../lib/router'
 import type { useStore } from '../lib/store'
 import { supabase } from '../lib/sync'
 import { Grid, Stat } from './Inspector'
+import ReviewCompare from './ReviewCompare'
+import TargetPicker from './TargetPicker'
 
 type Store = ReturnType<typeof useStore>
 /** Larger images are scaled down to this many pixels before review: plenty for every check, and phones keep up. */
@@ -83,22 +85,26 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
   const hist = inAccount ? (remote?.uid === user?.id ? remote?.list ?? [] : []) : local
 
   const byId = useMemo(() => new Map(catalog.map((o) => [o.id, o])), [catalog])
-  const targets = useMemo(() => store.wishlist.flatMap((w) => {
-    const o = byId.get(w.id) ?? extraObject(w)
-    return o ? [{ id: w.id, label: isCustom(w.id) ? o.names[0] : o.m ?? o.id }] : []
-  }), [store.wishlist, byId])
-  const nameOf = (id?: string) => targets.find((t) => t.id === id)?.label
-  const gear = gears.find((g) => g.id === inp.gearId) ?? units.find((g) => g.id === inp.gearId)
+  const mine = useMemo(() => store.wishlist.flatMap((w) => { const o = byId.get(w.id) ?? extraObject(w); return o ? [o] : [] }), [store.wishlist, byId])
+  /** Any catalogue object, or one of the wishlist's own (custom fields, comets). */
+  const objectOf = (id?: string) => (id ? byId.get(id) ?? mine.find((o) => o.id === id) : undefined)
+  const nameOf = (id?: string) => { const o = objectOf(id); return o ? (isCustom(o.id) ? o.names[0] : o.m ?? o.id) : undefined }
+  const gearOf = (id?: string) => gears.find((g) => g.id === id) ?? units.find((g) => g.id === id)
+  const gear = gearOf(inp.gearId)
   const site = store.locations.find((l) => l.id === inp.siteId)
-  const targetObj = targetId ? byId.get(targetId) ?? (() => { const w = store.wishlist.find((x) => x.id === targetId); return w ? extraObject(w) ?? undefined : undefined })() : undefined
+  const targetObj = objectOf(targetId)
+  const [cmpId, setCmpId] = useState('')
+  const [cmpSrc, setCmpSrc] = useState<Record<string, string>>({})
   /** Picking a target fills in what the observation log knows: total hours, the latest sub length, the filter its type suggests. */
   const pickTarget = (id: string) => {
     setTargetId(id)
-    const w = store.wishlist.find((x) => x.id === id), o = id ? byId.get(id) ?? (w ? extraObject(w) : undefined) : undefined
+    const w = store.wishlist.find((x) => x.id === id), o = objectOf(id)
     const ses = w?.sessions ?? []
     const hours = ses.reduce((a, x) => a + (x.hours || 0), 0)
     const sub = [...ses].sort((a, b) => b.date.localeCompare(a.date)).find((x) => x.exposure)?.exposure
-    setI({ hours: hours || undefined, subSec: sub, filter: o ? defaultFilter(o.type) : 'none' })
+    const patch: Partial<ReviewInputs> = { hours: hours || undefined, subSec: sub, filter: o ? defaultFilter(o.type) : 'none' }
+    setI(patch)
+    return patch
   }
   // edits to the setup after a review are kept with it
   useEffect(() => {
@@ -122,9 +128,13 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
       if (objUrl.current) URL.revokeObjectURL(objUrl.current)
       objUrl.current = URL.createObjectURL(file)
       const W = Math.round(result.image.width / result.image.scale), H = Math.round(result.image.height / result.image.scale)
-      const inputs: ReviewInputs = { ...inp, size: inp.size === 'custom' ? 'custom' : looksResized(gear, W, H) ? 'resized' : 'captured' }
-      setInp(inputs); stored.current = JSON.stringify([targetId, inputs])
-      const rec = { id: crypto.randomUUID(), at: new Date().toISOString(), name: file.name, targetId: targetId || undefined, thumb, result, inputs }
+      // no target yet: try the file name ("M42_final.jpg", "pacman.png")
+      const guess = targetId ? undefined : guessTarget(catalog, file.name)
+      const tid = guess?.id ?? targetId
+      const fromLog = guess ? pickTarget(guess.id) : {}
+      const inputs: ReviewInputs = { ...inp, ...fromLog, size: inp.size === 'custom' ? 'custom' : looksResized(gear, W, H) ? 'resized' : 'captured' }
+      setInp(inputs); stored.current = JSON.stringify([tid, inputs]); setCmpId('')
+      const rec = { id: crypto.randomUUID(), at: new Date().toISOString(), name: file.name, targetId: tid || undefined, thumb, result, inputs }
       setCur({ id: rec.id, name: file.name, src: objUrl.current, result, targetId: rec.targetId })
       setBusy(false)
       if (db && user && setUp) {
@@ -146,7 +156,7 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
   const open = async (h: SavedReview) => {
     setCur({ id: h.id, name: h.name, src: h.thumb, result: h.result, targetId: h.targetId }); setSaving('')
     const inputs = h.inputs ?? inp
-    setTargetId(h.targetId ?? ''); setInp(inputs); stored.current = JSON.stringify([h.targetId ?? '', inputs])
+    setTargetId(h.targetId ?? ''); setInp(inputs); stored.current = JSON.stringify([h.targetId ?? '', inputs]); setCmpId('')
     window.scrollTo({ top: 0, behavior: 'smooth' })
     if (db && h.path) {
       try { const url = await imageUrl(db, h.path); setCur((c) => (c?.id === h.id ? { ...c, src: url } : c)) } catch { /* the thumbnail stays */ }
@@ -165,6 +175,15 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
   const list = r && ctx ? [...notes(r, { arcsecKnown: !!ctx.arcsec }), ...setupNotes(r, ctx)] : []
   const b = r?.background, s = r?.stars
   const issues = list.filter((n) => n.tone === 'warn' || n.tone === 'bad').length
+  // other reviews of the same target (any review when no target is set)
+  const others = cur ? hist.filter((h) => h.id !== cur.id && (!targetId || h.targetId === targetId)) : []
+  const other = others.find((h) => h.id === cmpId)
+  const ctxOf = (res: Review, i: ReviewInputs | undefined, tid?: string) => buildContext(i ?? {}, gearOf(i?.gearId), store.locations.find((l) => l.id === i?.siteId), objectOf(tid), { width: res.image.width / res.image.scale, height: res.image.height / res.image.scale })
+  const compareWith = async (id: string) => {
+    setCmpId(id)
+    const h = hist.find((x) => x.id === id)
+    if (h && db && h.path && !cmpSrc[h.id]) { try { const url = await imageUrl(db, h.path); setCmpSrc((m) => ({ ...m, [h.id]: url })) } catch { /* the thumbnail stays */ } }
+  }
   return (
     <div className="insp">
       <div className="ch wrap"><h2 className="th">Image review <small>background · noise · stars · colour · calibration</small></h2></div>
@@ -188,9 +207,7 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
           <label><small>Site</small><select value={inp.siteId ?? ''} onChange={(e) => setI({ siteId: e.target.value || undefined })}>
             <option value="">Not specified</option>{store.locations.map((l) => <option key={l.id} value={l.id}>{l.name}{l.bortle ? ` (Bortle ${l.bortle})` : ''}</option>)}
           </select></label>
-          <label><small>Target</small><select value={targetId} onChange={(e) => pickTarget(e.target.value)}>
-            <option value="">Not specified</option>{targets.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-          </select></label>
+          <label><small>Target</small><TargetPicker catalog={catalog} mine={mine} value={targetId} objectOf={(id) => objectOf(id)} onChange={(id) => { pickTarget(id); setCmpId('') }} /></label>
           <label><small>Integration (h)</small><input type="number" min={0} step={0.1} value={inp.hours ?? ''} onChange={(e) => setI({ hours: e.target.value ? +e.target.value : undefined })} placeholder="total" /></label>
           <label><small>Sub length (s)</small><input type="number" min={0} step={1} value={inp.subSec ?? ''} onChange={(e) => setI({ subSec: e.target.value ? +e.target.value : undefined })} placeholder="per frame" /></label>
           <label><small>Filter</small><select value={inp.filter ?? 'none'} onChange={(e) => setI({ filter: e.target.value as Filter })}>
@@ -203,13 +220,19 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
             ? <label><small>Scale (″/px)</small><input type="number" min={0} step={0.01} value={inp.arcsec ?? ''} onChange={(e) => setI({ arcsec: e.target.value ? +e.target.value : undefined })} placeholder="from a plate solve" /></label>
             : ctx?.arcsec ? <p className="note">{ctx.arcsec.toFixed(2)}″/px in this image{ctx.captureArcsec && Math.abs(ctx.captureArcsec / ctx.arcsec - 1) > 0.03 ? ` (${ctx.captureArcsec.toFixed(2)}″/px as captured)` : ''}</p> : null}
         </div>
-        <p className="note">{gears.length ? '' : <>Add your telescope and camera in <Link to="/account/gear">My gear</Link> to pick them here. </>}{targets.length > 0 ? 'Picking a target fills in integration and sub length from your observation log.' : ''}</p>
+        <p className="note">{gears.length ? '' : <>Add your telescope and camera in <Link to="/account/gear">My gear</Link> to pick them here. </>}Picking a target from your wishlist fills in integration and sub length from your observation log.</p>
       </details>
       {err && <p className="nmsg">{err}</p>}
 
       {cur && r && b && s && (
         <>
-          <h3>{cur.name}{nameOf(cur.targetId) ? ` · ${nameOf(cur.targetId)}` : ''} <small>{saving === 'saving' ? 'saving… · ' : saving === 'saved' ? 'saved to your account · ' : ''}{Math.round(r.image.width / r.image.scale)}×{Math.round(r.image.height / r.image.scale)}{r.image.mono ? ', mono' : ''} · {issues ? `${issues} thing${issues > 1 ? 's' : ''} to look at` : 'nothing obvious to fix'}</small></h3>
+          <h3>{cur.name}{nameOf(targetId) ? ` · ${nameOf(targetId)}` : ''} <small>{saving === 'saving' ? 'saving… · ' : saving === 'saved' ? 'saved to your account · ' : ''}{Math.round(r.image.width / r.image.scale)}×{Math.round(r.image.height / r.image.scale)}{r.image.mono ? ', mono' : ''} · {issues ? `${issues} thing${issues > 1 ? 's' : ''} to look at` : 'nothing obvious to fix'}</small></h3>
+          <label className="f inl rvcmpsel"><span>Compare</span>
+            <select value={cmpId} onChange={(e) => compareWith(e.target.value)} disabled={!others.length}>
+              <option value="">{others.length ? `with another review${targetId ? ` of ${nameOf(targetId)}` : ''}…` : targetId ? `no other reviews of ${nameOf(targetId)} yet` : 'no other reviews yet'}</option>
+              {others.map((h) => <option key={h.id} value={h.id}>{h.name} · {new Date(h.at).toLocaleDateString()}{!targetId && nameOf(h.targetId) ? ` · ${nameOf(h.targetId)}` : ''}</option>)}
+            </select></label>
+          {other && ctx && <ReviewCompare a={{ name: cur.name, src: cur.src, result: r, ctx }} b={{ name: other.name, at: other.at, src: cmpSrc[other.id] ?? other.thumb, result: other.result, ctx: ctxOf(other.result, other.inputs, other.targetId) }} onClose={() => setCmpId('')} />}
           <div className="rvtop">
             <figure className="rvimg">
               <img src={cur.src} alt="" />
@@ -220,7 +243,7 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
               )}
             </figure>
             <div className="istats">
-              <Stat k="Background" v={b.reliable ? `${b.level.toFixed(0)}/255` : '–'} s={b.reliable ? (b.colour ? (b.cast ? `leans ${b.cast}` : 'neutral') : undefined) : 'object fills the frame'} />
+              <Stat k="Background" v={b.reliable ? `${b.level.toFixed(0)}/255` : '–'} s={b.reliable ? `${b.colour ? (b.cast ? `leans ${b.cast}` : 'neutral') + ' · ' : ''}aim for 20–30` : 'object fills the frame'} />
               <Stat k="Gradient" v={b.reliable ? `${b.gradient.peakToPeak.toFixed(1)}` : '–'} s="levels across the frame" />
               <Stat k="Noise σ" v={r.noise.fine != null ? r.noise.fine.toFixed(1) : '–'} s={r.noise.coarse != null ? `${r.noise.coarse.toFixed(1)} at 4 px${r.noise.chroma != null ? ` · colour ${r.noise.chroma.toFixed(1)}` : ''}` : undefined} />
               <Stat k="Stars" v={s.measured.toLocaleString()} s={s.fwhm ? `${(s.fwhm.median / r.image.scale).toFixed(1)} px wide · e ${s.eccentricity?.median.toFixed(2) ?? '–'}` : undefined} />

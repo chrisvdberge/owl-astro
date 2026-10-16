@@ -600,9 +600,9 @@ export function analyze(img: RgbaImage, scale = 1): Review {
   }
 }
 
-export type Area = 'Background' | 'Noise' | 'Clipping' | 'Stars' | 'Calibration' | 'Colour'
+export type Area = 'Background' | 'Noise' | 'Clipping' | 'Stars' | 'Calibration' | 'Colour' | 'Setup'
 export interface Note { area: Area; tone: 'ok' | 'info' | 'warn' | 'bad'; text: string }
-export const AREAS: Area[] = ['Background', 'Noise', 'Clipping', 'Stars', 'Colour', 'Calibration']
+export const AREAS: Area[] = ['Setup', 'Background', 'Noise', 'Clipping', 'Stars', 'Colour', 'Calibration']
 
 const lv = (v: number) => `${v.toFixed(v < 10 ? 1 : 0)}/255`
 const compass = (deg: number) => ['right', 'lower right', 'bottom', 'lower left', 'left', 'upper left', 'top', 'upper right'][Math.round(deg / 45) % 8]
@@ -615,7 +615,7 @@ const CAST_FIX: Record<string, string> = {
  * Plain-language reading of a review with what to try. Thresholds are rules of thumb for finished images viewed
  * on screen, and aesthetic ones (background level, saturation) are suggestions, not errors.
  */
-export function notes(r: Review): Note[] {
+export function notes(r: Review, opts: { arcsecKnown?: boolean } = {}): Note[] {
   const out: Note[] = []
   const add = (area: Area, tone: Note['tone'], text: string) => out.push({ area, tone, text })
   const { background: bg, noise: n, clipping: c, stars: s, artefacts: a } = r
@@ -685,7 +685,7 @@ export function notes(r: Review): Note[] {
     const cornersF = [gf[0][0], gf[0][2], gf[2][0], gf[2][2]].filter((v): v is number => v != null)
     if (cornersF.length >= 3 && Math.max(...cornersF) / Math.min(...cornersF) > 1.3) add('Stars', 'warn', `Stars are ${Math.round((Math.max(...cornersF) / Math.min(...cornersF) - 1) * 100)}% larger in one corner than in another: sensor tilt.`)
     if (s.coveragePct > 5) add('Stars', 'warn', `Stars cover ${s.coveragePct.toFixed(0)}% of the image and compete with the object. Star reduction, or a gentler stretch of the stars, puts the focus back on the target.`)
-    else if (s.fwhm && s.fwhm.median > 7) add('Stars', 'warn', `Stars are large (half-maximum width ${s.fwhm.median.toFixed(1)} px). Star reduction or deconvolution will tighten them.`)
+    else if (s.fwhm && s.fwhm.median > 7 && !opts.arcsecKnown) add('Stars', 'warn', `Stars are large (half-maximum width ${s.fwhm.median.toFixed(1)} px). Star reduction or deconvolution will tighten them.`)
     else add('Stars', 'ok', `Stars take up ${s.coveragePct.toFixed(1)}% of the image${s.fwhm ? ` (half-maximum width ${s.fwhm.median.toFixed(1)} px)` : ''}.`)
     if (s.halo && s.halo.ringPct > 40) add('Stars', 'warn', `${s.halo.ringPct.toFixed(0)}% of the bright stars have a dark ring around them: over-sharpening, deconvolution ringing, or star reduction artefacts. Ease off, or protect the stars with a mask.`)
   }

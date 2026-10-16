@@ -1,8 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Review } from './review'
+import type { ReviewInputs } from './reviewSetup'
 
 /** An image review as kept in the list: on this device (no `path`) or in the account (image in the "reviews" bucket). */
-export interface SavedReview { id: string; at: string; name: string; targetId?: string; thumb: string; result: Review; path?: string }
+export interface SavedReview { id: string; at: string; name: string; targetId?: string; thumb: string; result: Review; inputs?: ReviewInputs; path?: string }
 
 const BUCKET = 'reviews'
 /** Files up to this size are stored as they are; larger ones as a scaled JPEG (the bucket allows 25 MB). */
@@ -21,7 +22,8 @@ export async function listReviews(db: SupabaseClient): Promise<SavedReview[]> {
   const { data, error } = await db.from('image_reviews').select('id, created, name, target_id, thumb, result, path').order('created', { ascending: false }).limit(100)
   if (missing(error)) throw new NotSetUp()
   if (error) throw error
-  return (data ?? []).map((r) => ({ id: r.id, at: r.created, name: r.name, targetId: r.target_id ?? undefined, thumb: r.thumb ?? '', result: r.result as Review, path: r.path }))
+  // the inputs (setup, site, integration) ride along in the result JSON
+  return (data ?? []).map((r) => { const { inputs, ...result } = r.result as Review & { inputs?: ReviewInputs }; return { id: r.id, at: r.created, name: r.name, targetId: r.target_id ?? undefined, thumb: r.thumb ?? '', result: result as Review, inputs, path: r.path } })
 }
 
 /** The file to store: the original when the bucket takes it, else the scaled copy that was reviewed. */
@@ -36,13 +38,19 @@ export async function saveReview(db: SupabaseClient, userId: string, rec: Omit<S
   const up = await db.storage.from(BUCKET).upload(path, blob, { contentType: blob.type || 'image/jpeg', upsert: false })
   if (missing(up.error as { message?: string } | null)) throw new NotSetUp()
   if (up.error) throw up.error
-  const { error } = await db.from('image_reviews').insert({ id: rec.id, created: rec.at, name: rec.name, target_id: rec.targetId ?? null, thumb: rec.thumb, result: rec.result, path })
+  const { error } = await db.from('image_reviews').insert({ id: rec.id, created: rec.at, name: rec.name, target_id: rec.targetId ?? null, thumb: rec.thumb, result: { ...rec.result, inputs: rec.inputs }, path })
   if (error) {
     await db.storage.from(BUCKET).remove([path])
     if (missing(error)) throw new NotSetUp()
     throw error
   }
   return { ...rec, path }
+}
+
+/** Save changed setup details (and target) for a stored review. */
+export async function updateReview(db: SupabaseClient, rec: SavedReview) {
+  const { error } = await db.from('image_reviews').update({ target_id: rec.targetId ?? null, result: { ...rec.result, inputs: rec.inputs } }).eq('id', rec.id)
+  if (error) throw error
 }
 
 export async function deleteReview(db: SupabaseClient, rec: SavedReview) {

@@ -2,7 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { extraObject, isCustom, type CatObject } from '../lib/catalog'
 import { AREAS, analyze, notes, type Review } from '../lib/review'
-import { NotSetUp, deleteReview, imageUrl, listReviews, loadLocal, saveLocal, saveReview, uploadBlob, type SavedReview } from '../lib/reviews'
+import { defaultFilter, type Filter } from '../lib/exposure'
+import { gearDefaultFirst, gearName, setupLabel, type GearItem } from '../lib/gear'
+import { defaultMount } from '../lib/gearplan'
+import { PRESETS } from '../lib/optics'
+import { NotSetUp, deleteReview, imageUrl, listReviews, loadLocal, saveLocal, saveReview, updateReview, uploadBlob, type SavedReview } from '../lib/reviews'
+import { buildContext, looksResized, setupNotes, type ReviewInputs } from '../lib/reviewSetup'
 import { Link } from '../lib/router'
 import type { useStore } from '../lib/store'
 import { supabase } from '../lib/sync'
@@ -57,6 +62,12 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
   const [local, setLocal] = useState<SavedReview[]>(loadLocal)
   const [remote, setRemote] = useState<{ uid: string; list: SavedReview[] } | null>(null)
   const [targetId, setTargetId] = useState('')
+  const gears = useMemo(() => gearDefaultFirst(store.settings), [store.settings])
+  /** All-in-one units anyone can pick, for when My gear is empty or the image came from a friend's scope. */
+  const units = useMemo((): GearItem[] => PRESETS.filter((p) => p.id !== 'custom').map((p) => ({ id: `unit:${p.id}`, presetId: p.id, optics: p.optics, mount: defaultMount(p.id) })), [])
+  const [inp, setInp] = useState<ReviewInputs>(() => ({ gearId: gearDefaultFirst(store.settings)[0]?.id, siteId: store.active?.id, filter: 'none', size: 'captured' }))
+  const setI = (patch: Partial<ReviewInputs>) => setInp((i) => ({ ...i, ...patch }))
+  const stored = useRef('')
   const [drag, setDrag] = useState(false)
   const input = useRef<HTMLInputElement>(null)
   const objUrl = useRef('')
@@ -77,6 +88,32 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
     return o ? [{ id: w.id, label: isCustom(w.id) ? o.names[0] : o.m ?? o.id }] : []
   }), [store.wishlist, byId])
   const nameOf = (id?: string) => targets.find((t) => t.id === id)?.label
+  const gear = gears.find((g) => g.id === inp.gearId) ?? units.find((g) => g.id === inp.gearId)
+  const site = store.locations.find((l) => l.id === inp.siteId)
+  const targetObj = targetId ? byId.get(targetId) ?? (() => { const w = store.wishlist.find((x) => x.id === targetId); return w ? extraObject(w) ?? undefined : undefined })() : undefined
+  /** Picking a target fills in what the observation log knows: total hours, the latest sub length, the filter its type suggests. */
+  const pickTarget = (id: string) => {
+    setTargetId(id)
+    const w = store.wishlist.find((x) => x.id === id), o = id ? byId.get(id) ?? (w ? extraObject(w) : undefined) : undefined
+    const ses = w?.sessions ?? []
+    const hours = ses.reduce((a, x) => a + (x.hours || 0), 0)
+    const sub = [...ses].sort((a, b) => b.date.localeCompare(a.date)).find((x) => x.exposure)?.exposure
+    setI({ hours: hours || undefined, subSec: sub, filter: o ? defaultFilter(o.type) : 'none' })
+  }
+  // edits to the setup after a review are kept with it
+  useEffect(() => {
+    if (!cur) return
+    const key = JSON.stringify([targetId, inp])
+    if (stored.current === key) return
+    const t = setTimeout(() => {
+      stored.current = key
+      const patch = (h: SavedReview) => (h.id === cur.id ? { ...h, targetId: targetId || undefined, inputs: inp } : h)
+      setLocal((l) => { if (!l.some((x) => x.id === cur.id)) return l; const next = l.map(patch); saveLocal(next); return next })
+      const rem = remote?.list.find((x) => x.id === cur.id)
+      if (rem && db) { setRemote((r) => r && { ...r, list: r.list.map(patch) }); updateReview(db, patch(rem)).catch((e) => setErr(`Couldn't save the setup details: ${e.message ?? e}`)) }
+    }, 800)
+    return () => clearTimeout(t)
+  }, [cur?.id, targetId, inp]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const run = async (file: File) => {
     setBusy(true); setErr(''); setSaving('')
@@ -84,7 +121,10 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
       const { result, thumb, scaled } = await review(file)
       if (objUrl.current) URL.revokeObjectURL(objUrl.current)
       objUrl.current = URL.createObjectURL(file)
-      const rec = { id: crypto.randomUUID(), at: new Date().toISOString(), name: file.name, targetId: targetId || undefined, thumb, result }
+      const W = Math.round(result.image.width / result.image.scale), H = Math.round(result.image.height / result.image.scale)
+      const inputs: ReviewInputs = { ...inp, size: inp.size === 'custom' ? 'custom' : looksResized(gear, W, H) ? 'resized' : 'captured' }
+      setInp(inputs); stored.current = JSON.stringify([targetId, inputs])
+      const rec = { id: crypto.randomUUID(), at: new Date().toISOString(), name: file.name, targetId: targetId || undefined, thumb, result, inputs }
       setCur({ id: rec.id, name: file.name, src: objUrl.current, result, targetId: rec.targetId })
       setBusy(false)
       if (db && user && setUp) {
@@ -105,6 +145,8 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
   }
   const open = async (h: SavedReview) => {
     setCur({ id: h.id, name: h.name, src: h.thumb, result: h.result, targetId: h.targetId }); setSaving('')
+    const inputs = h.inputs ?? inp
+    setTargetId(h.targetId ?? ''); setInp(inputs); stored.current = JSON.stringify([h.targetId ?? '', inputs])
     window.scrollTo({ top: 0, behavior: 'smooth' })
     if (db && h.path) {
       try { const url = await imageUrl(db, h.path); setCur((c) => (c?.id === h.id ? { ...c, src: url } : c)) } catch { /* the thumbnail stays */ }
@@ -119,7 +161,8 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
   }
 
   const r = cur?.result
-  const list = r ? notes(r) : []
+  const ctx = r ? buildContext(inp, gear, site, targetObj, { width: r.image.width / r.image.scale, height: r.image.height / r.image.scale }) : null
+  const list = r && ctx ? [...notes(r, { arcsecKnown: !!ctx.arcsec }), ...setupNotes(r, ctx)] : []
   const b = r?.background, s = r?.stars
   const issues = list.filter((n) => n.tone === 'warn' || n.tone === 'bad').length
   return (
@@ -134,10 +177,34 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
         <input ref={input} type="file" accept="image/jpeg,image/png,image/webp,image/tiff,.jpg,.jpeg,.png,.webp,.tif,.tiff" hidden onChange={(e) => { const f0 = e.target.files?.[0]; if (f0) run(f0); e.target.value = '' }} />
         {busy ? 'Reviewing… a large image takes a few seconds.' : 'Drop a processed image here, or click to choose'}
       </div>
-      <label className="f inl"><span>Target</span>
-        <select value={targetId} onChange={(e) => setTargetId(e.target.value)}>
-          <option value="">— none —</option>{targets.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-        </select></label>
+      <details className="rvform" open>
+        <summary>How it was made <small>optional: adds advice on star size, tracking, integration and sub length</small></summary>
+        <div>
+          <label><small>Setup</small><select value={inp.gearId ?? ''} onChange={(e) => setI({ gearId: e.target.value || undefined })}>
+            <option value="">Not specified</option>
+            {gears.length > 0 && <optgroup label="My gear">{gears.map((g) => <option key={g.id} value={g.id}>{gearName(g)}</option>)}</optgroup>}
+            <optgroup label="Smart telescopes">{units.map((g) => <option key={g.id} value={g.id}>{setupLabel(g.optics, g.presetId)}</option>)}</optgroup>
+          </select></label>
+          <label><small>Site</small><select value={inp.siteId ?? ''} onChange={(e) => setI({ siteId: e.target.value || undefined })}>
+            <option value="">Not specified</option>{store.locations.map((l) => <option key={l.id} value={l.id}>{l.name}{l.bortle ? ` (Bortle ${l.bortle})` : ''}</option>)}
+          </select></label>
+          <label><small>Target</small><select value={targetId} onChange={(e) => pickTarget(e.target.value)}>
+            <option value="">Not specified</option>{targets.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+          </select></label>
+          <label><small>Integration (h)</small><input type="number" min={0} step={0.1} value={inp.hours ?? ''} onChange={(e) => setI({ hours: e.target.value ? +e.target.value : undefined })} placeholder="total" /></label>
+          <label><small>Sub length (s)</small><input type="number" min={0} step={1} value={inp.subSec ?? ''} onChange={(e) => setI({ subSec: e.target.value ? +e.target.value : undefined })} placeholder="per frame" /></label>
+          <label><small>Filter</small><select value={inp.filter ?? 'none'} onChange={(e) => setI({ filter: e.target.value as Filter })}>
+            <option value="none">None / broadband</option><option value="dual">Dual-band (Hα + OIII)</option>
+          </select></label>
+          <label><small>Image size</small><select value={inp.size ?? 'captured'} onChange={(e) => setI({ size: e.target.value as ReviewInputs['size'] })}>
+            <option value="captured">As captured (maybe cropped)</option><option value="resized">Resized (whole frame)</option><option value="custom">Known scale (″/px)</option>
+          </select></label>
+          {inp.size === 'custom'
+            ? <label><small>Scale (″/px)</small><input type="number" min={0} step={0.01} value={inp.arcsec ?? ''} onChange={(e) => setI({ arcsec: e.target.value ? +e.target.value : undefined })} placeholder="from a plate solve" /></label>
+            : ctx?.arcsec ? <p className="note">{ctx.arcsec.toFixed(2)}″/px in this image{ctx.captureArcsec && Math.abs(ctx.captureArcsec / ctx.arcsec - 1) > 0.03 ? ` (${ctx.captureArcsec.toFixed(2)}″/px as captured)` : ''}</p> : null}
+        </div>
+        <p className="note">{gears.length ? '' : <>Add your telescope and camera in <Link to="/account/gear">My gear</Link> to pick them here. </>}{targets.length > 0 ? 'Picking a target fills in integration and sub length from your observation log.' : ''}</p>
+      </details>
       {err && <p className="nmsg">{err}</p>}
 
       {cur && r && b && s && (

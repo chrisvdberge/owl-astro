@@ -6,6 +6,7 @@ import { defaultFilter, type Filter } from '../lib/exposure'
 import { gearDefaultFirst, gearName, setupLabel, type GearItem } from '../lib/gear'
 import { MOUNTS, defaultMount } from '../lib/gearplan'
 import { CAMERAS, PRESETS, SCOPES, findCamera } from '../lib/optics'
+import { track } from '../lib/analytics'
 import { NotSetUp, deleteReview, imageUrl, listReviews, loadLocal, printReview, saveLocal, saveReview, setSharing, shareUrl, updateReview, uploadBlob, type SavedReview } from '../lib/reviews'
 import { buildContext, looksResized, otherGear, setupNotes, type OtherGear, type ReviewInputs } from '../lib/reviewSetup'
 import { Link } from '../lib/router'
@@ -161,6 +162,7 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
       setInp(inputs); stored.current = JSON.stringify([tid, inputs]); setCmpId('')
       const rec = { id: crypto.randomUUID(), at: new Date().toISOString(), name: file.name, targetId: tid || undefined, thumb, result, inputs }
       setCur({ id: rec.id, name: file.name, src: objUrl.current, result, targetId: rec.targetId, file })
+      track('image_reviewed', { signed_in: !!user })
       setBusy(false)
       if (db && user && setUp) {
         setSaving('saving')
@@ -211,6 +213,7 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
     try {
       const rec = { ...curSaved, share: curSaved.shareId ? undefined : { ctx, setup: gear ? gearName(gear) : undefined } }
       const shareId = await setSharing(db, rec, !curSaved.shareId)
+      if (shareId) track('review_shared')
       setRemote((rr) => rr && { ...rr, list: rr.list.map((x) => (x.id === rec.id ? { ...rec, shareId } : x)) })
       setCopied(false)
     } catch (e) { setErr(e instanceof NotSetUp ? 'Sharing isn\'t set up on this server yet (the database update hasn\'t been applied).' : `Couldn't change sharing: ${e instanceof Error ? e.message : String(e)}`) }

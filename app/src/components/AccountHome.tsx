@@ -1,3 +1,4 @@
+import { openConsent } from '../lib/analytics'
 import type { useAuth } from '../lib/auth'
 import { gearDefaultFirst, gearName } from '../lib/gear'
 import { Link } from '../lib/router'
@@ -44,6 +45,11 @@ export default function AccountHome({ store, auth }: { store: Store; auth: Retur
         <label className="f"><span>Minimum altitude °</span><input type="number" min={0} max={80} value={settings.minAlt} onChange={(e) => store.setSettings({ minAlt: +e.target.value })} /></label>
         <label className="f"><span>Minimum usable hours</span><input type="number" min={0} step={0.5} value={settings.minHours} onChange={(e) => store.setSettings({ minHours: +e.target.value })} /></label>
         <p className="note">A target counts as usable above this altitude, your horizon and any light domes you use as limits, for at least this long in a night.</p>
+      </section>
+      <section className="card">
+        <h3>Privacy</h3>
+        <p className="note">Visits are counted without cookies. Google Analytics, which sets cookies, runs only if you allowed it. <a href="https://owlastro.com/privacy">Privacy</a></p>
+        <div className="row"><button onClick={openConsent}>Cookie settings</button></div>
       </section>
     </div>
   )

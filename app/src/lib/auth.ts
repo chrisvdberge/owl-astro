@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
+import { track } from './analytics'
 import { supabase } from './sync'
 
 export function useAuth() {
@@ -18,11 +19,13 @@ export function useAuth() {
     /** Emails a one-time sign-in link (no password). */
     sendLink: async (email: string) => {
       const { error } = await supabase!.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } })
+      if (!error) track('login_link_sent')
       return error?.message ?? null
     },
     /** Signs in with the code (6–10 digits, as set in Supabase) from the same email (for phones where the link opens another browser than the app). */
     verifyCode: async (email: string, code: string) => {
       const { error } = await supabase!.auth.verifyOtp({ email, token: code, type: 'email' })
+      if (!error) track('login', { method: 'code' })
       return error?.message ?? null
     },
     signOut: () => supabase!.auth.signOut(),

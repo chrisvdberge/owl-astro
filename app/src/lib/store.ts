@@ -4,6 +4,7 @@ import type { Location } from './astro'
 import type { Optics } from './optics'
 import type { CustomTarget } from './catalog'
 import type { CometTarget } from './comets'
+import { track } from './analytics'
 import { DEFAULT_SETTINGS, type MoonTolerance, type Settings } from './suitability'
 
 export type Status = 'wishlist' | 'progress' | 'done'
@@ -176,6 +177,7 @@ export function useStore(userId: string | null) {
         const { status = 'wishlist', custom, comet } = opts
         if (s.wishlist.some((w) => w.id === id))
           return { ...s, wishlist: s.wishlist.map((w) => (w.id !== id ? w : { ...w, status: status === 'progress' && w.status === 'wishlist' ? 'progress' : w.status })) }
+        track('target_added', { status, kind: custom ? 'custom' : comet ? 'comet' : 'catalogue' })
         return { ...s, wishlist: [...s.wishlist, { id, status, notes: '', added: new Date().toISOString().slice(0, 10), custom, comet }] }
       }),
     addFraming: (id: string, f: Framing) =>
@@ -186,11 +188,13 @@ export function useStore(userId: string | null) {
       update((s) => ({ ...s, wishlist: s.wishlist.map((w) => (w.id === id ? { ...w, framings: (w.framings ?? []).filter((f) => f.id !== fid) } : w)) })),
     patchWish: (id: string, patch: Partial<WishItem>) =>
       update((s) => ({ ...s, wishlist: s.wishlist.map((w) => (w.id === id ? { ...w, ...patch } : w)) })),
-    addSession: (id: string, ses: Omit<Session, 'id'> & { id?: string }) =>
+    addSession: (id: string, ses: Omit<Session, 'id'> & { id?: string }) => {
+      track('observation_logged', { hours: ses.hours })
       update((s) => ({
         ...s,
         wishlist: s.wishlist.map((w) => (w.id === id ? { ...w, status: w.status === 'wishlist' ? 'progress' : w.status, sessions: [...(w.sessions ?? []), { ...ses, id: ses.id ?? crypto.randomUUID() }] } : w)),
-      })),
+      }))
+    },
     /** Changes an observation in place; leave a field out of `patch` to keep it, pass undefined to clear it. */
     patchSession: (id: string, sid: string, patch: Partial<Omit<Session, 'id'>>) =>
       update((s) => ({ ...s, wishlist: s.wishlist.map((w) => (w.id === id ? { ...w, sessions: (w.sessions ?? []).map((x) => (x.id === sid ? { ...x, ...patch } : x)) } : w)) })),

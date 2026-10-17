@@ -68,7 +68,8 @@ aren't object and reports:
 - **Object**: its colour.
 - **Calibration leftovers**: dust motes, amp glow, banding, walking noise and hot pixels.
 
-An optional "How it was made" panel (setup from My gear or a smart telescope, site, target, integration, sub length, filter, and
+An optional "How it was made" panel (setup from My gear, a smart telescope, a one-image setup from the telescope and camera
+lists, or none to ignore the gear; site, target, integration, sub length, filter, and
 whether the image was resized) adds advice in `app/src/lib/reviewSetup.ts`: star size in arcseconds against seeing and aperture,
 sampling, elongation explained by the mount, noise against the exposure model's expected signal-to-noise and hours for a good
 result, sub length against the sky, and dual-band filter and Bortle context. A target fills in integration and sub length from the

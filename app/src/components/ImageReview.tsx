@@ -4,10 +4,10 @@ import { extraObject, guessTarget, isCustom, type CatObject } from '../lib/catal
 import { analyze, notes, type Rect, type Review } from '../lib/review'
 import { defaultFilter, type Filter } from '../lib/exposure'
 import { gearDefaultFirst, gearName, setupLabel, type GearItem } from '../lib/gear'
-import { defaultMount } from '../lib/gearplan'
-import { PRESETS } from '../lib/optics'
+import { MOUNTS, defaultMount } from '../lib/gearplan'
+import { CAMERAS, PRESETS, SCOPES, findCamera } from '../lib/optics'
 import { NotSetUp, deleteReview, imageUrl, listReviews, loadLocal, printReview, saveLocal, saveReview, setSharing, shareUrl, updateReview, uploadBlob, type SavedReview } from '../lib/reviews'
-import { buildContext, looksResized, setupNotes, type ReviewInputs } from '../lib/reviewSetup'
+import { buildContext, looksResized, otherGear, setupNotes, type OtherGear, type ReviewInputs } from '../lib/reviewSetup'
 import { Link } from '../lib/router'
 import type { useStore } from '../lib/store'
 import { supabase } from '../lib/sync'
@@ -87,8 +87,12 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
   /** Any catalogue object, or one of the wishlist's own (custom fields, comets). */
   const objectOf = (id?: string) => (id ? byId.get(id) ?? mine.find((o) => o.id === id) : undefined)
   const nameOf = (id?: string) => { const o = objectOf(id); return o ? (isCustom(o.id) ? o.names[0] : o.m ?? o.id) : undefined }
-  const gearOf = (id?: string) => gears.find((g) => g.id === id) ?? units.find((g) => g.id === id)
-  const gear = gearOf(inp.gearId)
+  /** The setup a review's inputs name: my gear, a smart telescope, a one-image setup, or none (gear ignored). */
+  const gearFor = (i?: ReviewInputs) => (i?.gearId === 'other' ? otherGear(i.other) ?? undefined : gears.find((g) => g.id === i?.gearId) ?? units.find((g) => g.id === i?.gearId))
+  const gear = gearFor(inp)
+  const setOther = (patch: Partial<OtherGear>) => setInp((i) => ({ ...i, other: { ...i.other, ...patch } }))
+  // a one-image setup starts from my default camera: old images often differ only in the telescope
+  const pickGear = (id: string) => setInp((i) => ({ ...i, gearId: id || undefined, ...(id === 'other' && !i.other ? { other: { cameraId: gears[0] ? findCamera(gears[0].optics)?.id : undefined } } : {}) }))
   const site = store.locations.find((l) => l.id === inp.siteId)
   const targetObj = objectOf(targetId)
   const ctx = cur ? buildContext(inp, gear, site, targetObj, { width: cur.result.image.width / cur.result.image.scale, height: cur.result.image.height / cur.result.image.scale }) : null
@@ -198,7 +202,7 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
   // other reviews of the same target (any review when no target is set)
   const others = cur ? hist.filter((h) => h.id !== cur.id && (!targetId || h.targetId === targetId)) : []
   const other = others.find((h) => h.id === cmpId)
-  const ctxOf = (res: Review, i: ReviewInputs | undefined, tid?: string) => buildContext(i ?? {}, gearOf(i?.gearId), store.locations.find((l) => l.id === i?.siteId), objectOf(tid), { width: res.image.width / res.image.scale, height: res.image.height / res.image.scale })
+  const ctxOf = (res: Review, i: ReviewInputs | undefined, tid?: string) => buildContext(i ?? {}, gearFor(i), store.locations.find((l) => l.id === i?.siteId), objectOf(tid), { width: res.image.width / res.image.scale, height: res.image.height / res.image.scale })
   const curSaved = cur ? remote?.list.find((x) => x.id === cur.id) : undefined
   const [copied, setCopied] = useState(false)
   const toggleShare = async () => {
@@ -232,11 +236,29 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
       <details className="rvform" open>
         <summary>How it was made <small>optional: adds advice on star size, tracking, integration and sub length</small></summary>
         <div>
-          <label><small>Setup</small><select value={inp.gearId ?? ''} onChange={(e) => setI({ gearId: e.target.value || undefined })}>
-            <option value="">Not specified</option>
+          <label><small>Setup</small><select value={inp.gearId ?? ''} onChange={(e) => pickGear(e.target.value)}>
+            <option value="">None: ignore the gear</option>
+            <option value="other">Other setup, for this image only…</option>
             {gears.length > 0 && <optgroup label="My gear">{gears.map((g) => <option key={g.id} value={g.id}>{gearName(g)}</option>)}</optgroup>}
             <optgroup label="Smart telescopes">{units.map((g) => <option key={g.id} value={g.id}>{setupLabel(g.optics, g.presetId)}</option>)}</optgroup>
           </select></label>
+          {inp.gearId === 'other' && (
+            <>
+              <label><small>Telescope</small><select value={inp.other?.scopeId ?? ''} onChange={(e) => setOther({ scopeId: e.target.value || undefined })}>
+                <option value="">Type aperture and focal length</option>{SCOPES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+              </select></label>
+              {!inp.other?.scopeId && <>
+                <label><small>Aperture (mm)</small><input type="number" min={1} value={inp.other?.apertureMm ?? ''} onChange={(e) => setOther({ apertureMm: e.target.value ? +e.target.value : undefined })} /></label>
+                <label><small>Focal length (mm)</small><input type="number" min={1} value={inp.other?.focalLengthMm ?? ''} onChange={(e) => setOther({ focalLengthMm: e.target.value ? +e.target.value : undefined })} placeholder="with reducer" /></label>
+              </>}
+              <label><small>Camera</small><select value={inp.other?.cameraId ?? ''} onChange={(e) => setOther({ cameraId: e.target.value || undefined })}>
+                <option value="">Choose…</option>{CAMERAS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+              </select></label>
+              <label><small>Mount</small><select value={inp.other?.mount ?? ''} onChange={(e) => setOther({ mount: e.target.value || undefined })}>
+                <option value="">Unknown</option>{MOUNTS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+              </select></label>
+            </>
+          )}
           <label><small>Site</small><select value={inp.siteId ?? ''} onChange={(e) => setI({ siteId: e.target.value || undefined })}>
             <option value="">Not specified</option>{store.locations.map((l) => <option key={l.id} value={l.id}>{l.name}{l.bortle ? ` (Bortle ${l.bortle})` : ''}</option>)}
           </select></label>
@@ -253,7 +275,7 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
             ? <label><small>Scale (″/px)</small><input type="number" min={0} step={0.01} value={inp.arcsec ?? ''} onChange={(e) => setI({ arcsec: e.target.value ? +e.target.value : undefined })} placeholder="from a plate solve" /></label>
             : ctx?.arcsec ? <p className="note">{ctx.arcsec.toFixed(2)}″/px in this image{ctx.captureArcsec && Math.abs(ctx.captureArcsec / ctx.arcsec - 1) > 0.03 ? ` (${ctx.captureArcsec.toFixed(2)}″/px as captured)` : ''}</p> : null}
         </div>
-        <p className="note">{gears.length ? '' : <>Add your telescope and camera in <Link to="/account/gear">My gear</Link> to pick them here. </>}Picking a target from your wishlist fills in integration and sub length from your observation log.</p>
+        <p className="note">{inp.gearId === 'other' && !gear ? 'Choose a telescope (or type its aperture and focal length) and a camera for the setup advice. ' : ''}{gears.length ? '' : <>Add your telescope and camera in <Link to="/account/gear">My gear</Link> to pick them here. </>}Picking a target from your wishlist fills in integration and sub length from your observation log.</p>
       </details>
       {err && <p className="nmsg">{err}</p>}
 

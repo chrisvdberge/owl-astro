@@ -3,12 +3,15 @@ import type { CatObject } from './catalog'
 import { DEFAULT_BORTLE, SKY_PASS, TIERS, defaultFilter, estimateExposure, skyRate, withSensor, type Filter } from './exposure'
 import type { GearItem } from './gear'
 import { MOUNTS, defaultMount } from './gearplan'
-import { compute } from './optics'
+import { CAMERAS, SCOPES, compute } from './optics'
 import type { Note, Review } from './review'
 
 /** What the user said about how the image was made; every field optional. Saved with the review. */
+/** A setup for one image only (old images, borrowed gear): a listed or typed-in telescope, a listed camera, maybe the mount. */
+export interface OtherGear { scopeId?: string; apertureMm?: number; focalLengthMm?: number; cameraId?: string; mount?: string }
+
 export interface ReviewInputs {
-  gearId?: string; siteId?: string
+  gearId?: string; other?: OtherGear; siteId?: string
   hours?: number; subSec?: number; filter?: Filter
   size?: 'captured' | 'resized' | 'custom'; arcsec?: number
 }
@@ -24,6 +27,19 @@ export interface ReviewContext {
   hours?: number; subSec?: number; filter?: Filter
   needSub?: number                   // sub length where the sky buries read noise (10 × RN²)
   model?: { snr: number; tier: string; good: number; great: number }
+}
+
+/** The one-image setup as gear; null until both a telescope (or its figures) and a camera are known. */
+export function otherGear(o: OtherGear | undefined): GearItem | null {
+  if (!o) return null
+  const sc = SCOPES.find((x) => x.id === o.scopeId), cam = CAMERAS.find((x) => x.id === o.cameraId)
+  const apertureMm = sc?.apertureMm ?? o.apertureMm, focalLengthMm = sc?.focalLengthMm ?? o.focalLengthMm
+  if (!apertureMm || !focalLengthMm || !cam) return null
+  return {
+    id: 'other', presetId: 'custom', mount: o.mount ?? 'unknown',
+    name: `${sc ? sc.label.replace(/ \(.*\)$/, '') : `${apertureMm}/${focalLengthMm} mm`} + ${cam.label.replace(/ \(.*\)$/, '')}`,
+    optics: { apertureMm, focalLengthMm, sensorWmm: cam.sensorWmm, sensorHmm: cam.sensorHmm, pixelUm: cam.pixelUm, binning: 1, drizzle: 1, reducer: 1, qe: cam.qe, readNoise: cam.readNoise, fullWell: cam.fullWell, bits: cam.bits },
+  }
 }
 
 /** Does the image keep the sensor's shape? Then a smaller one was most likely resized rather than cropped. */
@@ -108,7 +124,10 @@ export function setupNotes(r: Review, ctx: ReviewContext): Note[] {
     else if (noisy && ctx.hours >= m.great) add('warn', `${hrs(ctx.hours)} is plenty for this target, so the noise is more than it should be. Check that darks and flats match the lights, that bad subs were rejected, and ease the stretch or noise reduction.`)
     else if (!noisy && m.snr < TIERS[0].snr) add('info', `The background is smooth although the model expects little signal after ${hrs(ctx.hours)}: probably strong noise reduction. Check that faint detail survived it.`)
     else if (!noisy && ctx.hours < m.good) add('ok', `Clean for ${hrs(ctx.hours)} of integration: the processing kept the noise down well.`)
-  } else if (ctx.hours && noisy) add('info', `With ${hrs(ctx.hours)} of integration some noise is expected; more time helps more than more noise reduction. Pick a target and setup for an estimate of how much.`)
+  } else if (ctx.hours && noisy) {
+    const missing = [!ctx.target && 'a target', !ctx.captureArcsec && 'a setup', !ctx.subSec && 'the sub length'].filter(Boolean).join(' and ')
+    add('info', `With ${hrs(ctx.hours)} of integration some noise is expected; more time helps more than more noise reduction.${missing ? ` Add ${missing} for an estimate of how much.` : ''}`)
+  }
 
   // sub length against the sky
   if (ctx.subSec && ctx.needSub) {

@@ -80,6 +80,11 @@ Signed in, each review is saved to the account: the result in `image_reviews` an
 bucket under `<user id>/` (the original up to 24 MB, else the reviewed copy as JPEG). Signed out, reviews are kept on the device.
 Overlay text (captions, watermarks, an app's credit line) is found as rows of flat-filled, letter-shaped bright marks near the
 edges and left out of every measurement; "Ignore an area…" lets you box anything else (a logo, a frame) and reviews again.
+A saved review can be shared: it gets a permanent link `/r/<token>` that anyone can open, signed in or not
+(`SharedReview.tsx`). Visitors read it through `get_shared_review(token)` (no access to the table, so shared reviews can't be
+listed) and may read, not list, the images of shared reviews. A shared review carries a snapshot of the numbers the setup advice
+needs (scale, aperture, Bortle, seeing, integration), without site names or locations. "Export PDF" prints the review alone (a
+print stylesheet), so the browser's Save as PDF gives a clean report.
 When the object fills the frame, the background and calibration checks are skipped. The checks and their rules of thumb are in
 `app/src/lib/review.ts`; it is pure TypeScript, so it runs under Node for tests.
 

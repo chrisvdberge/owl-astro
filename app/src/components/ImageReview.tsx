@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { extraObject, guessTarget, isCustom, type CatObject } from '../lib/catalog'
-import { AREAS, analyze, notes, type Rect, type Review } from '../lib/review'
+import { analyze, notes, type Rect, type Review } from '../lib/review'
 import { defaultFilter, type Filter } from '../lib/exposure'
 import { gearDefaultFirst, gearName, setupLabel, type GearItem } from '../lib/gear'
 import { defaultMount } from '../lib/gearplan'
 import { PRESETS } from '../lib/optics'
-import { NotSetUp, deleteReview, imageUrl, listReviews, loadLocal, saveLocal, saveReview, updateReview, uploadBlob, type SavedReview } from '../lib/reviews'
+import { NotSetUp, deleteReview, imageUrl, listReviews, loadLocal, printReview, saveLocal, saveReview, setSharing, shareUrl, updateReview, uploadBlob, type SavedReview } from '../lib/reviews'
 import { buildContext, looksResized, setupNotes, type ReviewInputs } from '../lib/reviewSetup'
 import { Link } from '../lib/router'
 import type { useStore } from '../lib/store'
 import { supabase } from '../lib/sync'
-import { Grid, Stat } from './Inspector'
+import { ReviewGrids, ReviewNotes, ReviewStats } from './ReviewParts'
 import ReviewCompare from './ReviewCompare'
 import TargetPicker from './TargetPicker'
 
@@ -50,8 +50,6 @@ async function review(file: File, exclude: Rect[] = []): Promise<{ result: Revie
   }).finally(() => worker.terminate())
   return { result, thumb, scaled }
 }
-
-const TONE_MARK = { ok: '✓', info: 'i', warn: '!', bad: '!!' } as const
 
 /** Script review of a finished image: background, noise, clipping, stars, colour and calibration leftovers, from the pixels alone. */
 export default function ImageReview({ user, store, catalog }: { user: User | null; store: Store; catalog: CatObject[] }) {
@@ -93,6 +91,7 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
   const gear = gearOf(inp.gearId)
   const site = store.locations.find((l) => l.id === inp.siteId)
   const targetObj = objectOf(targetId)
+  const ctx = cur ? buildContext(inp, gear, site, targetObj, { width: cur.result.image.width / cur.result.image.scale, height: cur.result.image.height / cur.result.image.scale }) : null
   const [cmpId, setCmpId] = useState('')
   const [cmpSrc, setCmpSrc] = useState<Record<string, string>>({})
   /** Picking a target fills in what the observation log knows: total hours, the latest sub length, the filter its type suggests. */
@@ -113,7 +112,7 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
     if (stored.current === key) return
     const t = setTimeout(() => {
       stored.current = key
-      const patch = (h: SavedReview) => (h.id === cur.id ? { ...h, targetId: targetId || undefined, inputs: inp } : h)
+      const patch = (h: SavedReview) => (h.id === cur.id ? { ...h, targetId: targetId || undefined, inputs: inp, ...(h.shareId && ctx ? { share: { ctx, setup: gear ? gearName(gear) : undefined } } : {}) } : h)
       setLocal((l) => { if (!l.some((x) => x.id === cur.id)) return l; const next = l.map(patch); saveLocal(next); return next })
       const rem = remote?.list.find((x) => x.id === cur.id)
       if (rem && db) { setRemote((r) => r && { ...r, list: r.list.map(patch) }); updateReview(db, patch(rem)).catch((e) => setErr(`Couldn't save the setup details: ${e.message ?? e}`)) }
@@ -193,7 +192,6 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
   }
 
   const r = cur?.result
-  const ctx = r ? buildContext(inp, gear, site, targetObj, { width: r.image.width / r.image.scale, height: r.image.height / r.image.scale }) : null
   const list = r && ctx ? [...notes(r, { arcsecKnown: !!ctx.arcsec }), ...setupNotes(r, ctx)] : []
   const b = r?.background, s = r?.stars
   const issues = list.filter((n) => n.tone === 'warn' || n.tone === 'bad').length
@@ -201,6 +199,19 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
   const others = cur ? hist.filter((h) => h.id !== cur.id && (!targetId || h.targetId === targetId)) : []
   const other = others.find((h) => h.id === cmpId)
   const ctxOf = (res: Review, i: ReviewInputs | undefined, tid?: string) => buildContext(i ?? {}, gearOf(i?.gearId), store.locations.find((l) => l.id === i?.siteId), objectOf(tid), { width: res.image.width / res.image.scale, height: res.image.height / res.image.scale })
+  const curSaved = cur ? remote?.list.find((x) => x.id === cur.id) : undefined
+  const [copied, setCopied] = useState(false)
+  const toggleShare = async () => {
+    if (!db || !curSaved || !ctx) return
+    if (curSaved.shareId && !window.confirm('Stop sharing? The link will stop working for everyone who has it.')) return
+    try {
+      const rec = { ...curSaved, share: curSaved.shareId ? undefined : { ctx, setup: gear ? gearName(gear) : undefined } }
+      const shareId = await setSharing(db, rec, !curSaved.shareId)
+      setRemote((rr) => rr && { ...rr, list: rr.list.map((x) => (x.id === rec.id ? { ...rec, shareId } : x)) })
+      setCopied(false)
+    } catch (e) { setErr(e instanceof NotSetUp ? 'Sharing isn\'t set up on this server yet (the database update hasn\'t been applied).' : `Couldn't change sharing: ${e instanceof Error ? e.message : String(e)}`) }
+  }
+  const copyLink = async (url: string) => { try { await navigator.clipboard.writeText(url); setCopied(true) } catch { window.prompt('Copy this link:', url) } }
   const compareWith = async (id: string) => {
     setCmpId(id)
     const h = hist.find((x) => x.id === id)
@@ -209,7 +220,7 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
   return (
     <div className="insp">
       <div className="ch wrap"><h2 className="th">Image review <small>background · noise · stars · colour · calibration</small></h2></div>
-      <p className="note">Checks a finished (stretched) image: use a JPEG, PNG or WebP at full size. {inAccount ? 'The image and its review are saved to your account.' : user && !setUp ? 'Saving to your account isn\'t set up on this server yet, so reviews are kept on this device.' : <><Link to="/account">Sign in</Link> to save images and reviews to your account; until then they're kept on this device.</>} To measure a linear stack, use the <Link to="/tools/inspector">Image inspector</Link>.</p>
+      <p className="note noprint">Checks a finished (stretched) image: use a JPEG, PNG or WebP at full size. {inAccount ? 'The image and its review are saved to your account.' : user && !setUp ? 'Saving to your account isn\'t set up on this server yet, so reviews are kept on this device.' : <><Link to="/account">Sign in</Link> to save images and reviews to your account; until then they're kept on this device.</>} To measure a linear stack, use the <Link to="/tools/inspector">Image inspector</Link>.</p>
 
       <div className={`idrop ${drag ? 'over' : ''}`}
         onDragOver={(e) => { e.preventDefault(); setDrag(true) }} onDragLeave={() => setDrag(false)}
@@ -254,6 +265,14 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
               <option value="">{others.length ? `with another review${targetId ? ` of ${nameOf(targetId)}` : ''}…` : targetId ? `no other reviews of ${nameOf(targetId)} yet` : 'no other reviews yet'}</option>
               {others.map((h) => <option key={h.id} value={h.id}>{h.name} · {new Date(h.at).toLocaleDateString()}{!targetId && nameOf(h.targetId) ? ` · ${nameOf(h.targetId)}` : ''}</option>)}
             </select></label>
+          <div className="rvshare noprint">
+            <button onClick={() => printReview(cur.name)}>Export PDF</button>
+            {curSaved
+              ? <button onClick={toggleShare} className={curSaved.shareId ? 'on' : ''}>{curSaved.shareId ? 'Stop sharing' : 'Share…'}</button>
+              : <button disabled title={user ? 'Saving to your account comes first' : 'Sign in to save and share reviews'}>Share…</button>}
+            {curSaved?.shareId && <span className="rvlink"><input readOnly value={shareUrl(curSaved.shareId)} onFocus={(e) => e.target.select()} /><button onClick={() => copyLink(shareUrl(curSaved.shareId!))}>{copied ? 'Copied' : 'Copy link'}</button></span>}
+            {!user && <small className="note">Sign in to share a review with a link.</small>}
+          </div>
           {other && ctx && <ReviewCompare a={{ name: cur.name, src: cur.src, result: r, ctx }} b={{ name: other.name, at: other.at, src: cmpSrc[other.id] ?? other.thumb, result: other.result, ctx: ctxOf(other.result, other.inputs, other.targetId) }} onClose={() => setCmpId('')} />}
           <div className="rvtop">
             <div>
@@ -281,36 +300,16 @@ export default function ImageReview({ user, store, catalog }: { user: User | nul
               <button onClick={() => setMarking(!marking)} disabled={!cur.file || busy} title={cur.file ? undefined : 'Drop the image again to change what is left out'}>{marking ? 'Done' : 'Ignore an area…'}</button>
             </div>
             </div>
-            <div className="istats">
-              <Stat k="Background" v={b.reliable ? `${b.level.toFixed(0)}/255` : '–'} s={b.reliable ? `${b.colour ? (b.cast ? `leans ${b.cast}` : 'neutral') + ' · ' : ''}aim for 20–30` : 'object fills the frame'} />
-              <Stat k="Gradient" v={b.reliable ? `${b.gradient.peakToPeak.toFixed(1)}` : '–'} s="levels across the frame" />
-              <Stat k="Noise σ" v={r.noise.fine != null ? r.noise.fine.toFixed(1) : '–'} s={r.noise.coarse != null ? `${r.noise.coarse.toFixed(1)} at 4 px${r.noise.chroma != null ? ` · colour ${r.noise.chroma.toFixed(1)}` : ''}` : undefined} />
-              <Stat k="Stars" v={s.measured.toLocaleString()} s={s.fwhm ? `${(s.fwhm.median / r.image.scale).toFixed(1)} px wide · e ${s.eccentricity?.median.toFixed(2) ?? '–'}` : undefined} />
-              <Stat k="Star cover" v={`${s.coveragePct.toFixed(1)}%`} s={s.colour ? `${(100 - s.colour.whitePct).toFixed(0)}% show colour` : undefined} />
-              <Stat k="Clipped" v={`${r.clipping.blackPct.toFixed(1)}% · ${r.clipping.whitePct.toFixed(1)}%`} s="black · white" />
-            </div>
+            <ReviewStats r={r} />
           </div>
-          {AREAS.map((area) => {
-            const ns = list.filter((n) => n.area === area)
-            return ns.length ? (
-              <section key={area} className="rvarea">
-                <h4>{area}</h4>
-                <ul className="ifind">{ns.map((n, i) => <li key={i} className={n.tone}><i>{TONE_MARK[n.tone]}</i>{n.text}</li>)}</ul>
-              </section>
-            ) : null
-          })}
-          <div className="igrids rvgrids">
-            {b.reliable && <Grid title="Background across the frame" rows={b.grid} fmt={(v) => `${v > 0 ? '+' : ''}${v.toFixed(1)}`} med={0} span={Math.max(2, b.gradient.peakToPeak / 2)} note="levels from the median background; – where the object is" />}
-            {s.fwhm && <Grid title="Star size across the field" rows={s.grid.fwhm.map((row) => row.map((v) => (v == null ? null : v / r.image.scale)))} fmt={(v) => v.toFixed(1)} med={s.fwhm.median / r.image.scale} span={(s.fwhm.median / r.image.scale) * 0.25} note="px at half maximum, 3×3 cells" />}
-            {s.eccentricity && <Grid title="Star roundness across the field" rows={s.grid.eccentricity} fmt={(v) => v.toFixed(2)} med={s.eccentricity.median} span={0.2} note="eccentricity: 0 round, 1 a line" />}
-          </div>
-          <p className="note">Thresholds are rules of thumb for images viewed on screen. Background level and saturation are a matter of taste, so treat those as suggestions.</p>
+          <ReviewNotes list={list} />
+          <ReviewGrids r={r} />
         </>
       )}
 
       {hist.length > 0 && (
         <>
-          <h3>{inAccount ? 'Saved reviews' : 'Recent reviews on this device'}</h3>
+          <h3 className="noprint">{inAccount ? 'Saved reviews' : 'Recent reviews on this device'}</h3>
           <div className="ihist">
             {hist.map((h) => {
               const n = notes(h.result).filter((x) => x.tone === 'warn' || x.tone === 'bad').length

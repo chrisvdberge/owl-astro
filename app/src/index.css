@@ -245,6 +245,8 @@ details.more { margin-top: 8px; } details.more summary { cursor: pointer; color:
 .rvimg.marking { cursor: crosshair; touch-action: none; } .rvimg.marking svg { pointer-events: none; } .rvimg.marking svg rect.exman { pointer-events: all; cursor: pointer; }
 .rvimg rect { fill: rgba(56,189,248,.12); stroke: var(--acc); stroke-width: 2; vector-effect: non-scaling-stroke; } .rvimg rect.exauto { stroke-dasharray: 5 4; fill: rgba(139,151,171,.15); stroke: var(--mute); }
 .rvexcl { display: flex; align-items: center; gap: 10px; justify-content: space-between; margin-top: 6px; } .rvexcl small { color: var(--mute); }
+.rvshare { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; } .rvshare button.on { border-color: var(--acc); color: var(--acc); }
+.rvlink { display: flex; gap: 6px; flex: 1; min-width: 220px; } .rvlink input { flex: 1; min-width: 0; font-size: 13px; }
 .rvthumb { width: 54px; height: 36px; object-fit: cover; border-radius: 4px; }
 @media (max-width: 800px) { .rvtop { grid-template-columns: 1fr; } }
 @media (max-width: 700px) { .rvtop .istats { grid-template-columns: 1fr 1fr; } .rvgrids .igrid > div span { font-size: 9px; padding: 6px 0; letter-spacing: -0.3px; } }
@@ -409,3 +411,16 @@ header a.acctbtn.synced .sdot { background: var(--ok); } header a.acctbtn.syncin
 .gcl > li { border-top: 1px solid var(--line); padding: 10px 0; } .gcl > li:first-child { border-top: 0; }
 .gcb { white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0 8px; }
 .gcr textarea { width: 100%; box-sizing: border-box; margin: 8px 0 6px; font: inherit; }
+
+/* Export PDF (print): the review alone, light, without the app around it */
+@media print {
+  :root { --bg: #fff; --panel: #f4f5f7; --line: #d6dae1; --fg: #111; --mute: #555; --acc: #0369a1; --ok: #15803d; --warn: #b45309; --bad: #b91c1c; color-scheme: light; }
+  body { background: #fff !important; color: #111; }
+  html, body, #root { height: auto !important; } .app { display: block !important; height: auto !important; }
+  header, .tabbar, .msheet, .mback, .noprint, .rvform, .idrop, .rvcmpsel, .ihist, .rvexcl button, .nmsg { display: none !important; }
+  .insp .ch button { display: none; }
+  .pmain { padding: 0 !important; margin: 0 !important; max-width: none !important; overflow: visible !important; }
+  .rvtop { grid-template-columns: 1.3fr 1fr; } .rvtop .istats { grid-template-columns: 1fr 1fr; }
+  .istat, .ifind li, .igrid > div span, .rvcmp { break-inside: avoid; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .rvarea { break-inside: avoid-page; } .rvimg img { max-height: 60vh; object-fit: contain; }
+}

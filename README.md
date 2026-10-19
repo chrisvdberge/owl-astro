@@ -89,6 +89,20 @@ print stylesheet), so the browser's Save as PDF gives a clean report.
 When the object fills the frame, the background and calibration checks are skipped. The checks and their rules of thumb are in
 `app/src/lib/review.ts`; it is pure TypeScript, so it runs under Node for tests.
 
+## Mosaic check
+
+Tools → Mosaic check (`/tools/mosaic`) plate-solves up to 8 panels of a mosaic (stretched JPEG, PNG or WebP) in the browser and
+draws where they landed on the sky: a flat (TAN) view with east left and north up, clean or on a survey from hips2fits, optionally
+with the images themselves warped into place, and a PNG export. It lists the overlap of every pair (as a share of the smaller
+panel: under 5% is too thin to stitch when nothing else joins the two, 10–35% is good), the sky covered, panels that don't
+connect, different camera angles, mirrored panels and different image scales.
+The solver (`app/src/lib/platesolve.ts`, in a Web Worker) needs a hint: the target (or a file name that names it) and the setup
+(My gear, a smart telescope, or a focal length and camera), within ±20% in scale. It finds stars in the image, fetches Gaia DR3 stars
+around the hint from the CDS HiPS catalogue service (static tiles sorted by brightness, so the density fits the field at any focal
+length), matches triangles of neighbouring stars, and refines an affine and then a quadratic fit (lens distortion). Panels already
+solved become hints for the others, and fix the scale for images of the same shape. Nothing is uploaded and nothing is saved yet.
+Overlap geometry is in `app/src/lib/mosaic.ts`; both files are pure TypeScript and run under Node.
+
 ## Catalog
 
 `app/public/catalog.json` is generated: `node app/scripts/fetch-catalogs.mjs` downloads the extra catalogs into

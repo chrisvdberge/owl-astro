@@ -412,6 +412,22 @@ header a.acctbtn.synced .sdot { background: var(--ok); } header a.acctbtn.syncin
 .gcb { white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0 8px; }
 .gcr textarea { width: 100%; box-sizing: border-box; margin: 8px 0 6px; font: inherit; }
 
+/* mosaic check: solved panels on the sky */
+.mosl .ihrow { align-items: center; } .mosl .ihrow.failed { border-left: 3px solid var(--warn); } .mosl .ihrow.solving { border-left: 3px solid var(--acc); }
+.mosw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; flex: none; vertical-align: -1px; }
+.mosn { flex: 1; display: grid; gap: 2px; min-width: 0; } .mosn input { background: none; border: 0; color: var(--fg); font-weight: 600; padding: 2px 0; min-width: 0; } .mosn input:focus { outline: 1px solid var(--line); }
+.mosn small { color: var(--mute); overflow-wrap: anywhere; } .mosnear { display: flex; align-items: center; gap: 6px; } .mosnear .tpick { flex: 1; max-width: 300px; }
+.mosst { font-size: 12px; color: var(--mute); } .mosst.solved { color: var(--ok); } .mosst.failed { color: var(--warn); } .mosst.solving { color: var(--acc); }
+.mosctl { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin: 14px 0 4px; } .mosctl .f.inl { grid-template-columns: auto minmax(140px, 220px); margin: 0; } .moschk { display: flex; gap: 6px; align-items: center; }
+.mosplot { margin: 6px 0 4px; } .mosplot svg { width: 100%; height: auto; display: block; }
+.mosplot figcaption { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 4px; }
+.moslbl { font-size: 13px; font-weight: 600; paint-order: stroke; stroke-width: 3.5px; stroke-linejoin: round; } .moslbl.sm { font-size: 12px; font-weight: 500; }
+.mosax { font-size: 11.5px; fill: var(--mute); }
+.mostab { width: 100%; border-collapse: collapse; margin: 10px 0 20px; font-size: 13.5px; } .mostab th { text-align: left; color: var(--mute); font-weight: 500; font-size: 12px; padding: 4px 8px; }
+.mostab td { padding: 6px 8px; border-top: 1px solid var(--line); } .mostab tr { cursor: pointer; } .mostab tr.on td, .mostab tbody tr:hover td { background: var(--panel); }
+.mostab td.ok { color: var(--ok); } .mostab td.warn { color: var(--warn); } .mostab td.info { color: var(--mute); } .mostab .mute { color: var(--mute); }
+@media (max-width: 640px) { .mostab small { display: none; } .mosl .rvthumb { display: none; } }
+
 /* Export PDF (print): the review alone, light, without the app around it */
 @media print {
   :root { --bg: #fff; --panel: #f4f5f7; --line: #d6dae1; --fg: #111; --mute: #555; --acc: #0369a1; --ok: #15803d; --warn: #b45309; --bad: #b91c1c; color-scheme: light; }

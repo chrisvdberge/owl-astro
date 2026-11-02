@@ -1,4 +1,5 @@
 // Serves the static app (./dist) and a few small proxies for data sources that do not send CORS headers.
+import { cutout } from './cutout.ts'
 
 const COBS = 'https://cobs.si/api/comet_list.api?is-active=true'
 const SIX_HOURS = 6 * 3600
@@ -19,10 +20,21 @@ async function cobsComets(request, ctx) {
   return body
 }
 
+/** Survey cutouts (see cutout.ts), kept in the edge cache for as long as their cache-control allows. */
+async function surveyCutout(request, url, ctx) {
+  const cache = caches.default
+  const hit = await cache.match(request)
+  if (hit) return hit
+  const res = await cutout(url.searchParams)
+  if (res.ok) ctx.waitUntil(cache.put(request, res.clone()))
+  return res
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
     if (url.pathname === '/api/cobs/comets') return cobsComets(request, ctx)
+    if (url.pathname === '/api/cutout') return surveyCutout(request, url, ctx)
     return env.ASSETS.fetch(request)
   },
 }

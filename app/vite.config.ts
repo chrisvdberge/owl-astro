@@ -1,6 +1,7 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { cutout } from './worker/cutout.ts'
 
 const WEEK = 7 * 24 * 3600
 const cors200 = { statuses: [200] } // only real (CORS) responses: opaque ones count several MB each against the storage quota
@@ -9,6 +10,18 @@ const cors200 = { statuses: [200] } // only real (CORS) responses: opaque ones c
 export default defineConfig({
   plugins: [
     react(),
+    // in dev, /api/cutout runs the worker's handler (worker/cutout.ts) directly
+    {
+      name: 'survey-cutouts',
+      configureServer(server) {
+        server.middlewares.use('/api/cutout', async (req, res) => {
+          const r = await cutout(new URL(req.url ?? '', 'http://dev').searchParams)
+          res.statusCode = r.status
+          r.headers.forEach((v, k) => res.setHeader(k, v))
+          res.end(Buffer.from(await r.arrayBuffer()))
+        })
+      },
+    },
     VitePWA({
       registerType: 'prompt', // the app shows "new version — reload" instead of swapping code under a running session
       includeAssets: ['favicon.svg', 'favicon.ico', 'apple-touch-icon-180x180.png'],
@@ -42,7 +55,7 @@ export default defineConfig({
           // survey tiles for the places you looked at, so the sky view still shows them in the field
           { urlPattern: ({ url }) => /\/Norder\d+\//.test(url.pathname) || /\/properties$/.test(url.pathname), handler: 'CacheFirst', options: { cacheName: 'sky-tiles', expiration: { maxEntries: 1500, maxAgeSeconds: 30 * 24 * 3600 }, cacheableResponse: cors200 } },
           // framing previews, catalogue thumbnails and example images
-          { urlPattern: ({ url }) => url.hostname.endsWith('hips-image-services') || url.pathname.includes('hips2fits') || url.hostname === 'upload.wikimedia.org', handler: 'StaleWhileRevalidate', options: { cacheName: 'images', expiration: { maxEntries: 400, maxAgeSeconds: 30 * 24 * 3600 }, cacheableResponse: cors200 } },
+          { urlPattern: ({ url }) => url.pathname === '/api/cutout' || url.hostname === 'upload.wikimedia.org', handler: 'StaleWhileRevalidate', options: { cacheName: 'images', expiration: { maxEntries: 400, maxAgeSeconds: 30 * 24 * 3600 }, cacheableResponse: cors200 } },
           { urlPattern: /^https:\/\/(en\.wikipedia|commons\.wikimedia)\.org\/w\/api\.php/, handler: 'StaleWhileRevalidate', options: { cacheName: 'wiki', expiration: { maxEntries: 200, maxAgeSeconds: WEEK }, cacheableResponse: cors200 } },
         ],
       },

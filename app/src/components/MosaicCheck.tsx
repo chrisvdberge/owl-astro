@@ -413,7 +413,7 @@ function MosaicPlot({ frames, lay, ov, hi, bg, showImgs, target }: { frames: Img
         <text transform={`translate(14 ${MT + PH / 2}) rotate(-90)`} textAnchor="middle" className="mosax">degrees (north up)</text>
       </svg>
       <figcaption>
-        {bg && bgState?.url === bgUrl && !bgState.ok ? <small className="note">The survey image didn't load (offline, or the survey doesn't cover this part of the sky).</small> : <small className="note">{bg ? `${SURVEYS.find((x) => x.id === bg)?.label} from CDS hips2fits` : 'Offsets from the mosaic centre'}{on ? ` · hatched: ${frames[on.a].label} ∩ ${frames[on.b].label}` : ' · hover an overlap below to see it'}</small>}
+        {bg && bgState?.url === bgUrl && !bgState.ok ? <small className="note">The survey image didn't load (offline, or the survey doesn't cover this part of the sky).</small> : <small className="note">{bg ? `${SURVEYS.find((x) => x.id === bg)?.label} from CDS hips2fits (NASA SkyView, grayscale, while CDS is down)` : 'Offsets from the mosaic centre'}{on ? ` · hatched: ${frames[on.a].label} ∩ ${frames[on.b].label}` : ' · hover an overlap below to see it'}</small>}
         <button onClick={savePng} disabled={saving}>{saving ? 'Saving…' : 'Save PNG'}</button>
       </figcaption>
     </figure>

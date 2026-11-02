@@ -4,6 +4,7 @@ import { CATALOGS, catalogTag, customObject, extraObject, extraOf, findBySlug, i
 import { CAMERAS, findCamera, PRESETS, SCOPES, SEEING, compute, framingFit, mosaicPanels, rectCorners, sessionCrop, type Optics } from './lib/optics'
 import { scopeName } from './components/FramingPreview'
 import { SURVEYS, defaultSurvey } from './lib/surveys'
+import { cdsDown } from './lib/cds'
 import * as Astronomy from 'astronomy-engine'
 import { altAzToRaDec, glowAlt, horizonAlt, limitAlt, lstHours, parallacticAngle, parallacticFromLst, sampleNight, separation, targetAltAz, type Location } from './lib/astro'
 import { useStore, type Status } from './lib/store'
@@ -54,6 +55,8 @@ const NEUTRAL = { brightness: 0, contrast: 0, saturation: 0, gamma: 1 }
 type Look = typeof NEUTRAL
 const loadLook = (): Look => { try { return { ...NEUTRAL, ...JSON.parse(localStorage.getItem(LOOK_KEY) ?? '{}') } } catch { return NEUTRAL } }
 const hips = (id: string) => SURVEYS.find((s) => s.id === id)!.hips
+/** What the sky view loads for a survey: its CDS id, or while CDS is down its ESASky mirror (DSS2 colour's for surveys without one). */
+const hipsLayer = (id: string, down: boolean) => down ? SURVEYS.find((s) => s.id === id)!.mirror ?? SURVEYS[0].mirror! : hips(id)
 
 export default function App() {
   const viewRef = useRef<HTMLDivElement>(null)
@@ -75,6 +78,7 @@ export default function App() {
   const [optics, setOptics] = useState<Optics>(PRESETS[0].optics)
   const [rotation, setRotation] = useState(0)
   const [survey, setSurvey] = useState('dss2')
+  const [cdsOut, setCdsOut] = useState(false)
   const [look, setLook] = useState<Look>(loadLook)
   const [overlayId, setOverlayId] = useState('none')
   const [opacity, setOpacity] = useState(0.4)
@@ -231,12 +235,12 @@ export default function App() {
   }, [store.settings.scope])
 
   useEffect(() => {
-    let dead = false, loaded = false
+    let dead = false, loaded = false, down = false
     // Aladin is created the first time the sky view is visible: made inside a hidden (zero-size) element it keeps a broken zoom and aspect
     const start = () => {
       if (dead || !loaded || !viewRef.current?.clientWidth || aladin.current) return
       aladin.current = A.aladin(viewRef.current, {
-        survey: hips('dss2'), target: '83.82 -5.39', fov: 3.5,
+        survey: hipsLayer('dss2', down), target: '83.82 -5.39', fov: 3.5,
         showReticle: false, showCooGrid: false, showFullscreenControl: false, showSimbadPointerControl: false,
         showLayersControl: false, showGotoControl: false, showProjectionControl: false,
       })
@@ -277,13 +281,15 @@ export default function App() {
       aladin.current.addOverlay(overlay.current)
       setReady(true)
     }
-    A.init.then(() => { loaded = true; start() })
+    // wait for the CDS check too: a first layer that names a CDS survey stalls the view while CDS is down
+    Promise.all([A.init, cdsDown()]).then(([, d]) => { down = d; loaded = true; start() })
     const ro = new ResizeObserver(() => { start(); aladin.current?.view?.fixLayoutDimensions?.() })
     if (viewRef.current) ro.observe(viewRef.current)
     return () => { dead = true; ro.disconnect() }
   }, [])
 
-  useEffect(() => { if (ready) aladin.current.setBaseImageLayer(hips(survey)) }, [ready, survey])
+  useEffect(() => { cdsDown().then(setCdsOut) }, [])
+  useEffect(() => { if (ready) aladin.current.setBaseImageLayer(hipsLayer(survey, cdsOut)) }, [ready, survey, cdsOut])
 
   // brightness / contrast / saturation / gamma of the background survey (replaces Aladin's right-drag adjustment)
   useEffect(() => {
@@ -292,16 +298,17 @@ export default function App() {
     layer?.setBrightness?.(look.brightness); layer?.setContrast?.(look.contrast)
     layer?.setSaturation?.(look.saturation); layer?.setGamma?.(look.gamma)
     try { localStorage.setItem(LOOK_KEY, JSON.stringify(look)) } catch { /* ignore */ }
-  }, [ready, survey, look])
+  }, [ready, survey, cdsOut, look])
 
   useEffect(() => {
     if (!ready) return
-    if (overlayId === 'none') aladin.current.removeImageLayer?.('overlay')
+    // while CDS is down, an overlay without a mirror is left off rather than shown as a second copy of DSS2
+    if (overlayId === 'none' || (cdsOut && !SURVEYS.find((s) => s.id === overlayId)?.mirror)) aladin.current.removeImageLayer?.('overlay')
     else {
-      const layer = aladin.current.setOverlayImageLayer(A.imageHiPS(hips(overlayId)), 'overlay')
+      const layer = aladin.current.setOverlayImageLayer(A.imageHiPS(hipsLayer(overlayId, cdsOut)), 'overlay')
       layer?.setOpacity?.(opacity)
     }
-  }, [ready, overlayId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ready, overlayId, cdsOut]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (ready && overlayId !== 'none') aladin.current.getOverlayImageLayer?.('overlay')?.setOpacity?.(opacity)
@@ -864,6 +871,7 @@ export default function App() {
           <select value={survey} onChange={(e) => setSurvey(e.target.value)}>{SURVEYS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
         </label>
         <small className="note">{SURVEYS.find((s) => s.id === survey)?.note}</small>
+        {cdsOut && <small className="note">CDS (Strasbourg) isn't answering, so the sky comes from ESASky's copy{SURVEYS.find((s) => s.id === survey)?.mirror ? '' : ' of DSS2 colour'} and previews are grayscale from NASA SkyView.</small>}
         <div><label className="note"><input type="checkbox" checked={showCon} onChange={(e) => setShowCon(e.target.checked)} /> Show constellations</label></div>
         <label className="f"><span>Overlay</span>
           <select value={overlayId} onChange={(e) => setOverlayId(e.target.value)}>

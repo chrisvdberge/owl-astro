@@ -196,14 +196,26 @@ async function limited<T>(f: () => Promise<T>): Promise<T> {
   active++
   try { return await f() } finally { active--; waiting.shift()?.() }
 }
-/** Gaia stars in a disc, down to a density (stars per deg²), brightest first; tiles are kept for the next image. */
+/** Gaia stars in a disc, down to a density (stars per deg²), brightest first: CDS tiles, or ESASky once CDS has failed. */
 export async function gaiaCone(ra: number, dec: number, radius: number, density: number, fetcher: typeof fetch = fetch): Promise<CatStar[]> {
+  if (!tilesDown) {
+    try { return await tileCone(ra, dec, radius, density, fetcher) } catch { tilesDown = true }
+  }
+  return esaCone(ra, dec, radius, density, fetcher)
+}
+
+/** Set when a CDS tile request fails: the rest of this session asks ESASky instead of waiting on CDS again. */
+let tilesDown = false
+const TILE_TIMEOUT = 8000
+
+/** From the CDS Gaia HiPS tiles; tiles are kept for the next image. */
+async function tileCone(ra: number, dec: number, radius: number, density: number, fetcher: typeof fetch): Promise<CatStar[]> {
   const k = orderFor(density)
   const got = await Promise.all(discTiles(ra, dec, radius, k).map(([j, n]) => {
     const key = `${j}/${n}`
     let p = tiles.get(key)
     if (!p) {
-      p = limited(() => fetcher(`${HIPS}/Norder${j}/Dir${Math.floor(n / 10000) * 10000}/Npix${n}.tsv`)
+      p = limited(() => fetcher(`${HIPS}/Norder${j}/Dir${Math.floor(n / 10000) * 10000}/Npix${n}.tsv`, { signal: AbortSignal.timeout(TILE_TIMEOUT) })
         .then((r) => (r.ok ? r.text().then(parseTile) : r.status === 404 ? [] : Promise.reject(new Error(`Gaia tiles: HTTP ${r.status}`)))))
       p.catch(() => tiles.delete(key))
       tiles.set(key, p)
@@ -211,6 +223,27 @@ export async function gaiaCone(ra: number, dec: number, radius: number, density:
     return p
   }))
   return got.flat().filter((s) => separation(ra, dec, s.ra, s.dec) <= radius).sort((a, b) => a.mag - b.mag)
+}
+
+const ESASKY_TAP = 'https://sky.esa.int/esasky-tap/tap/sync'
+
+/**
+ * From ESASky's Gaia DR3 table: the brightest stars in the disc, as many as the density asks for. A magnitude limit
+ * would make the query slow, so it is TOP n by brightness instead; about a second for a 1° disc, even in the Milky Way.
+ */
+export async function esaCone(ra: number, dec: number, radius: number, density: number, fetcher: typeof fetch = fetch): Promise<CatStar[]> {
+  const area = 2 * Math.PI * (1 - Math.cos(radius * D2R)) / (D2R * D2R)
+  const n = Math.min(5000, Math.ceil(density * area))
+  const query = `SELECT TOP ${n} ra,dec,phot_g_mean_mag FROM catalogues.t_gaia_source_dr3_fdw `
+    + `WHERE 1=CONTAINS(POINT('ICRS',ra,dec),CIRCLE('ICRS',${ra.toFixed(5)},${dec.toFixed(5)},${radius.toFixed(4)})) ORDER BY phot_g_mean_mag`
+  const res = await fetcher(`${ESASKY_TAP}?${new URLSearchParams({ REQUEST: 'doQuery', LANG: 'ADQL', FORMAT: 'csv', QUERY: query })}`, { signal: AbortSignal.timeout(90000) })
+  if (!res.ok) throw new Error(`Gaia stars (ESASky): HTTP ${res.status}`)
+  const out: CatStar[] = []
+  for (const l of (await res.text()).split('\n').slice(1)) {
+    const [a, d, g] = l.split(',').map(Number)
+    if (Number.isFinite(a) && Number.isFinite(d) && Number.isFinite(g)) out.push({ ra: a, dec: d, mag: g })
+  }
+  return out
 }
 
 // ---------------------------------------------------------------- matching

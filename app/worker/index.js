@@ -1,5 +1,6 @@
 // Serves the static app (./dist) and a few small proxies for data sources that do not send CORS headers.
 import { cutout } from './cutout.ts'
+import { poll } from './remote.js'
 
 const COBS = 'https://cobs.si/api/comet_list.api?is-active=true'
 const SIX_HOURS = 6 * 3600
@@ -36,5 +37,10 @@ export default {
     if (url.pathname === '/api/cobs/comets') return cobsComets(request, ctx)
     if (url.pathname === '/api/cutout') return surveyCutout(request, url, ctx)
     return env.ASSETS.fetch(request)
+  },
+
+  // remote observatory tracking, every 10 minutes (see remote.js)
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(poll(env))
   },
 }

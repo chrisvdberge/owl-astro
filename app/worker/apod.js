@@ -16,6 +16,13 @@ export const APOD_NAMES = {
   itelescope: /iTelescope/i,
   'e-eye': /\bE-?EyE\b|Entre Encinas/i,
   'skygems-hakos': /Hakos/i,
+  'kagga-kamma': /Kagga Kamma/i,
+  'deep-sky-west': /Deep\s?Sky\s?West/i,
+  'dark-sky-new-mexico': /Dark\s?Sky New Mexico/i,
+  // case-sensitive: "under New Mexico skies" is a common phrase
+  'new-mexico-skies': /New Mexico Skies/,
+  'utah-desert-remote-observatories': /Utah Desert Remote|\bUDRO\b/i,
+  'trevinca-skies': /Trevinca/i,
 }
 
 const decode = (s) => s.replace(/<[^>]+>/g, ' ').replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n))

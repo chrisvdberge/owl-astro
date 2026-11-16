@@ -24,6 +24,7 @@ export const APOD_NAMES = {
   'utah-desert-remote-observatories': /Utah Desert Remote|\bUDRO\b/i,
   'trevinca-skies': /Trevinca/i,
   pixelskies: /Pixel\s?Skies/i,
+  astropeak: /Astro\s?Peak Observatory|astropeak\.space/i,
 }
 
 const decode = (s) => s.replace(/<[^>]+>/g, ' ').replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n))

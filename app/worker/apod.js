@@ -22,6 +22,21 @@ const decode = (s) => s.replace(/<[^>]+>/g, ' ').replace(/&#(\d+);/g, (_, n) => 
   .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
   .replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&(nbsp|ndash|rsquo|lsquo|ldquo|rdquo);/g, ' ').replace(/\s+/g, ' ').trim()
 
+/**
+ * The APOD's image on NASA's image service, in the form that resizes on request (content/dam/ paths don't).
+ * Asked for separately: the API only includes featured_image (with the alt text) alongside featured_media, and not with content.
+ */
+async function apodImage(slug) {
+  const res = await fetch(`${API}?slug=${encodeURIComponent(slug)}&_fields=featured_media,featured_image,featured_image_url`, {
+    headers: { accept: 'application/json', 'user-agent': 'OwlAstro remote tracker (owlastro.com/remote)' }, signal: AbortSignal.timeout(30e3),
+  })
+  const [post] = res.ok ? await res.json() : []
+  if (!post) return { image: null, image_alt: null }
+  const fi = post.featured_image && !Array.isArray(post.featured_image) ? post.featured_image : {}
+  const url = fi.file || (post.featured_image_url ?? '').split('?')[0]
+  return { image: url ? url.replace('assets.science.nasa.gov/content/dam/', 'assets.science.nasa.gov/dynamicimage/assets/') : null, image_alt: fi.alt ? decode(fi.alt).slice(0, 300) : null }
+}
+
 /** APOD posts among the newest image articles → rows for remote_apods */
 export async function findApods() {
   const res = await fetch(`${API}?per_page=40&orderby=date&_fields=slug,date,title,link,content`, {
@@ -34,11 +49,14 @@ export async function findApods() {
     const text = decode(post.content?.rendered ?? '')
     const at = text.indexOf('Credit')
     const credit = at >= 0 ? text.slice(at, text.indexOf('Authors', at) >>> 0) : ''
+    let img
     for (const [observatory, re] of Object.entries(APOD_NAMES)) {
       if (!re.test(text)) continue
+      img ??= await apodImage(post.slug)
       rows.push({
         observatory, apod_date: post.date.slice(0, 10), link: post.link, in_credit: re.test(credit),
         title: decode(post.title?.rendered ?? '').replace(/^APOD:\s*[^–]*–\s*/, ''),
+        ...img,
       })
     }
   }

@@ -10,6 +10,7 @@
     "run_worker_first": ["/api/*"]
   },
   // remote observatory poller (worker/remote.js); SUPABASE_SECRET_KEY is a secret set with `npx wrangler secret put`
-  "triggers": { "crons": ["*/10 * * * *"] },
+  // the second cron is the daily APOD check (worker/apod.js); keep it equal to APOD_CRON in worker/index.js
+  "triggers": { "crons": ["*/10 * * * *", "20 14 * * *"] },
   "vars": { "SUPABASE_URL": "https://thnewjnwaurozpaqesyu.supabase.co" }
 }

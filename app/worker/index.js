@@ -1,6 +1,9 @@
 // Serves the static app (./dist) and a few small proxies for data sources that do not send CORS headers.
 import { cutout } from './cutout.ts'
 import { poll } from './remote.js'
+import { checkApods } from './apod.js'
+
+const APOD_CRON = '20 14 * * *' // daily, well after each new APOD is posted (midnight US Eastern)
 
 const COBS = 'https://cobs.si/api/comet_list.api?is-active=true'
 const SIX_HOURS = 6 * 3600
@@ -39,8 +42,8 @@ export default {
     return env.ASSETS.fetch(request)
   },
 
-  // remote observatory tracking, every 10 minutes (see remote.js)
+  // remote observatory tracking: every 10 minutes (remote.js), and once a day the newest APODs (apod.js)
   async scheduled(controller, env, ctx) {
-    ctx.waitUntil(poll(env))
+    ctx.waitUntil(controller.cron === APOD_CRON ? checkApods(env) : poll(env))
   },
 }

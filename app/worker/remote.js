@@ -123,11 +123,35 @@ async function sro() {
   return { roofs: null, weather }
 }
 
+/**
+ * Nebula Nest (nebulanest.online): the site's AAG CloudWatcher Solo as JSON, refreshed every 2 minutes. No roof status
+ * is published. "clear" is the CloudWatcher's own cloud verdict (cloudsSafe, by the limit set on the unit).
+ */
+async function nebulaNest() {
+  const d = await getJson('https://weather.nebulanest.online/')
+  // "2026/11/18 06:28:26", UTC
+  const at = Date.parse(`${String(d.dataGMTTime).replace(/\//g, '-').replace(' ', 'T')}Z`)
+  if (!(Date.now() - at < STALE_MS)) throw new Error('weather is stale')
+  const n = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined)
+  const kmh = (v) => (n(v) == null ? undefined : Math.round((v / 3.6) * 10) / 10)
+  const weather = {
+    temperature: n(d.temp), humidity: n(d.hum), dew_point: n(d.dewp), pressure: n(d.relpress),
+    wind_speed: kmh(d.wind), wind_gust: kmh(d.gust),
+    // "clouds" is sky minus ambient: the sky temperature is the sum
+    sky_temp: n(d.clouds) != null && n(d.temp) != null ? Math.round((d.clouds + d.temp) * 10) / 10 : undefined,
+    // the light sensor reads mag/arcsec² only in the dark; in daylight it bottoms out around 10
+    sky_quality: n(d.lightmpsas) > 15 ? d.lightmpsas : undefined,
+  }
+  if (typeof d.cloudsSafe === 'string') weather.clear = d.cloudsSafe === 'Safe'
+  return { roofs: null, weather }
+}
+
 // slug must match remote_observatories and the site's src/content/observatories/<slug>
 export const OBSERVATORIES = [
   { slug: 'starfront', lat: 31.546934, lon: -99.381944, read: starfront },
   { slug: 'obstech-el-sauce', lat: -30.471, lon: -70.765, read: obstech },
   { slug: 'sierra-remote-observatories', lat: SRO.lat, lon: SRO.lon, read: sro },
+  { slug: 'nebula-nest', lat: -36.30, lon: 142.05, read: nebulaNest },
 ]
 
 /** Solar altitude in degrees (low-precision, ~0.1°: plenty to tell day from night) */

@@ -25,6 +25,7 @@ export const APOD_NAMES = {
   'trevinca-skies': /Trevinca/i,
   pixelskies: /Pixel\s?Skies/i,
   astropeak: /Astro\s?Peak Observatory|astropeak\.space/i,
+  'nebula-nest': /Nebula\s?Nest|Rent An Observatory/i,
 }
 
 const decode = (s) => s.replace(/<[^>]+>/g, ' ').replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n))

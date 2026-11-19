@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import A from 'aladin-lite'
+import { drawMoon, positionAngle, type MoonAt } from './lib/moonDraw'
 import { CATALOGS, catalogTag, customObject, extraObject, extraOf, findBySlug, isCustom, loadCatalog, searchCatalog, sexa, slugOf, type CatObject, type CustomTarget } from './lib/catalog'
 import { CAMERAS, findCamera, PRESETS, SCOPES, SEEING, compute, framingFit, mosaicPanels, rectCorners, sessionCrop, type Optics } from './lib/optics'
 import { scopeName } from './components/FramingPreview'
@@ -67,6 +68,7 @@ export default function App() {
   const figures = useRef<any[]>([]) // eslint-disable-line @typescript-eslint/no-explicit-any
   const cometLayers = useRef<any[]>([]) // eslint-disable-line @typescript-eslint/no-explicit-any
   const solar = useRef<any[]>([]) // eslint-disable-line @typescript-eslint/no-explicit-any
+  const moonAt = useRef<MoonAt | null>(null)
   const cometMarks = useRef<{ ra: number; dec: number; t: number; mag?: number }[]>([]) // the daily dots on a comet's path, for hover tips
   const [catalog, setCatalog] = useState<CatObject[]>([])
   const [query, setQuery] = useState('')
@@ -273,10 +275,10 @@ export default function App() {
       aladin.current.addOverlay(cometLayers.current[0]); aladin.current.addCatalog(cometLayers.current[1])
       // the Moon (its disc) and the planets at the viewed moment
       solar.current = [
-        A.graphicOverlay({ name: 'moon', color: 'rgba(229,231,235,0.9)', lineWidth: 1.5 }),
+        A.catalog({ name: 'moon', sourceSize: 16, shape: (src: { x: number; y: number }, ctx: CanvasRenderingContext2D) => { if (moonAt.current) drawMoon(ctx, src.x, src.y, moonAt.current, (ra, dec) => aladin.current?.world2pix?.(ra, dec)) } }),
         A.catalog({ name: 'planets', shape: 'circle', sourceSize: 9, color: '#fde68a', displayLabel: true, labelColumn: 'name', labelColor: '#fde68a', labelFont: '12px sans-serif' }),
       ]
-      aladin.current.addOverlay(solar.current[0]); aladin.current.addCatalog(solar.current[1])
+      aladin.current.addCatalog(solar.current[0]); aladin.current.addCatalog(solar.current[1])
       overlay.current = A.graphicOverlay({ color: '#38bdf8', lineWidth: 2 })
       aladin.current.addOverlay(overlay.current)
       setReady(true)
@@ -358,12 +360,17 @@ export default function App() {
     disc.removeAll(); labels.removeAll(); disc.reportChange?.()
     const obs = new Astronomy.Observer(loc.lat, loc.lon, loc.elevation)
     const m = Astronomy.Equator(Astronomy.Body.Moon, when, obs, false, true)
+    const sun = Astronomy.Equator(Astronomy.Body.Sun, when, obs, false, true)
     const sd = Math.asin(1737.4 / (m.dist * 149597870.7)) * (180 / Math.PI)
-    disc.add(A.circle(m.ra * 15, m.dec, sd, { color: 'rgba(229,231,235,0.9)', fillColor: 'rgba(229,231,235,0.12)' }))
-    const illum = Math.round(Astronomy.Illumination(Astronomy.Body.Moon, when).phase_fraction * 100)
+    const ill = Astronomy.Illumination(Astronomy.Body.Moon, when)
+    moonAt.current = {
+      ra: m.ra * 15, dec: m.dec, sd, phaseAngle: ill.phase_angle,
+      limbPA: positionAngle(m.ra * 15, m.dec, sun.ra * 15, sun.dec),
+      label: `Moon ${Math.round(ill.phase_fraction * 100)}%`,
+    }
+    disc.addSources([A.source(m.ra * 15, m.dec, {})])
     const bodies = [Astronomy.Body.Mercury, Astronomy.Body.Venus, Astronomy.Body.Mars, Astronomy.Body.Jupiter, Astronomy.Body.Saturn, Astronomy.Body.Uranus, Astronomy.Body.Neptune]
     labels.addSources([
-      A.source(m.ra * 15, m.dec + sd, { name: `Moon ${illum}%` }),
       ...bodies.map((b) => { const e = Astronomy.Equator(b, when, obs, false, true); return A.source(e.ra * 15, e.dec, { name: b }) }),
     ])
   }, [ready, when, loc])

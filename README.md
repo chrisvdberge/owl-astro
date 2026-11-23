@@ -58,8 +58,8 @@ the makers' charts in `app/src/lib/gain.ts`.
 
 ## Sharing a site
 
-Account → My sites → 🔗 Share gives a link anyone can open, signed in or not: `/site?n=<name>&lat&lon&el&tz&s&b&hz=az_alt~az_alt…`.
-The whole site (coordinates, elevation, time zone, seeing, Bortle, horizon profile) rides in the URL, so nothing is stored
+Account → My sites → 🔗 Share gives a link anyone can open, signed in or not: `/site?lat&lon&el&tz&s&b&hz=az_alt~az_alt…`.
+The site (coordinates, elevation, time zone, seeing, Bortle, horizon profile, but not its name) rides in the URL, so nothing is stored
 and no account is needed (`app/src/lib/siteShare.ts`). The visitor sees the site page read-only (sky quality, light domes,
 directions) and can save it to their own sites.
 

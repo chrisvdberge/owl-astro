@@ -139,7 +139,7 @@ function ShareSite({ loc }: { loc: Location }) {
     try { await navigator.clipboard.writeText(url); setCopied(url) } catch { /* the field stays selectable */ }
   }
   return <div className="sshare row wrap"><input readOnly value={url} onFocus={(e) => e.target.select()} /><button onClick={copy}>{copied === url ? 'Copied' : 'Copy link'}</button>
-    <small className="note">Anyone with the link sees this site’s sky, light domes and horizon, no account needed. It carries the exact coordinates.</small></div>
+    <small className="note">Anyone with the link sees this site’s sky, light domes and horizon, no account needed. It carries the exact coordinates, not the site’s name.</small></div>
 }
 
 /** The site page: the active site, editable, or (shared) a site from a link, read-only, that the visitor can save. */
@@ -264,8 +264,10 @@ export default function SiteView({ store, shared }: { store: Store; shared?: Loc
   const home = store.locations.find((l) => l.id === store.homeId)
   // a shared site the visitor already has (same spot to ~10 m)
   const mineAlready = ro ? store.locations.find((l) => Math.abs(l.lat - loc.lat) < 1e-4 && Math.abs(l.lon - loc.lon) < 1e-4) : undefined
-  function saveShared() {
-    const l: Location = { ...loc, id: crypto.randomUUID(), glow: undefined }
+  async function saveShared() {
+    const name = prompt('Name for the site', (await placeName(loc.lat, loc.lon)) ?? 'Shared site')
+    if (!name) return
+    const l: Location = { ...loc, id: crypto.randomUUID(), name, glow: undefined }
     store.addLocation(l)
     navigate('/account/sites')
   }
@@ -290,7 +292,7 @@ export default function SiteView({ store, shared }: { store: Store; shared?: Loc
 
         <div className="scol">
           <section className="card">
-            <h3>{loc.name} <small>{loc.lat.toFixed(4)}, {loc.lon.toFixed(4)}</small></h3>
+            <h3>{ro ? 'Shared site' : loc.name} <small>{loc.lat.toFixed(4)}, {loc.lon.toFixed(4)}</small></h3>
             {ro && <p className="note">{Math.round(loc.elevation)} m · {loc.tz ?? tzOf(loc)} · horizon {loc.horizon.length ? `profile of ${loc.horizon.length} points` : 'flat'}{loc.bortle ? ` · set as Bortle ${loc.bortle}` : ''}</p>}
             {sky === 'loading' ? <p className="note">Reading the light-pollution atlas…</p>
               : !s ? <p className="note">No atlas data here (it covers 65°S–75°N) or no connection.</p>

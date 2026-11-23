@@ -2,15 +2,15 @@ import type { HorizonPoint, Location } from './astro'
 import { tzFromCoords } from './tz'
 
 /**
- * A site as a link anyone can open: everything the site page needs rides in the URL (/site?n=…&lat=…&lon=…), so there is
- * nothing stored and no account needed. The horizon goes as az_alt pairs joined by ~ (characters a URL leaves alone).
+ * A site as a link anyone can open: everything the site page needs rides in the URL (/site?lat=…&lon=…), so there is
+ * nothing stored and no account needed. The site's name stays private: the visitor names it when saving. The horizon goes as az_alt pairs joined by ~ (characters a URL leaves alone).
  */
 const validTz = (tz: string | null) => { if (!tz) return undefined; try { new Intl.DateTimeFormat('en', { timeZone: tz }); return tz } catch { return undefined } }
 const num = (v: string | null) => (v == null || v === '' || !Number.isFinite(+v) ? undefined : +v)
 
 export function siteSharePath(l: Location): string {
   const q: [string, string | number | undefined][] = [
-    ['n', l.name], ['lat', l.lat.toFixed(4)], ['lon', l.lon.toFixed(4)], ['el', Math.round(l.elevation)],
+    ['lat', l.lat.toFixed(4)], ['lon', l.lon.toFixed(4)], ['el', Math.round(l.elevation)],
     ['tz', l.tz], ['s', l.seeing], ['b', l.bortle],
     ['hz', l.horizon.length ? l.horizon.map(([a, v]) => `${+a.toFixed(1)}_${+v.toFixed(1)}`).join('~') : undefined],
   ]
@@ -26,7 +26,7 @@ export function siteFromQuery(q: URLSearchParams): Location | null {
   const horizon = (q.get('hz') ?? '').split('~').map((p) => p.split('_').map(Number)).filter((p): p is HorizonPoint => p.length === 2 && p.every(Number.isFinite) && p[0] >= 0 && p[0] < 360 && p[1] >= -10 && p[1] <= 90).sort((a, b) => a[0] - b[0])
   const b = num(q.get('b')), s = num(q.get('s'))
   return {
-    id: `shared:${lat},${lon}`, name: (q.get('n') ?? '').trim().slice(0, 80) || `${lat.toFixed(3)}, ${lon.toFixed(3)}`,
+    id: `shared:${lat},${lon}`, name: 'Shared site',
     lat, lon, elevation: num(q.get('el')) ?? 0, horizon, tz: validTz(q.get('tz')) ?? tzFromCoords(lat, lon),
     seeing: s != null && s > 0 && s < 10 ? s : undefined, bortle: b != null && b >= 1 && b <= 9 ? Math.round(b) : undefined,
   }

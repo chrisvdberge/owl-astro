@@ -247,6 +247,7 @@ details.more { margin-top: 8px; } details.more summary { cursor: pointer; color:
 .rvexcl { display: flex; align-items: center; gap: 10px; justify-content: space-between; margin-top: 6px; } .rvexcl small { color: var(--mute); }
 .rvshare { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; } .rvshare button.on { border-color: var(--acc); color: var(--acc); }
 .rvlink { display: flex; gap: 6px; flex: 1; min-width: 220px; } .rvlink input { flex: 1; min-width: 0; font-size: 13px; }
+.sshare { gap: 6px; margin: 0 0 10px; } .sshare input { flex: 1; min-width: 220px; font-size: 13px; } .sshare small { flex-basis: 100%; }
 .rvthumb { width: 54px; height: 36px; object-fit: cover; border-radius: 4px; }
 @media (max-width: 800px) { .rvtop { grid-template-columns: 1fr; } }
 @media (max-width: 700px) { .rvtop .istats { grid-template-columns: 1fr 1fr; } .rvgrids .igrid > div span { font-size: 9px; padding: 6px 0; letter-spacing: -0.3px; } }

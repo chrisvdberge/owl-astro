@@ -8,6 +8,8 @@ import { elevationAt, searchPlaces, type Place } from '../lib/places'
 import { DEFAULT_BORTLE } from '../lib/exposure'
 import { SEEING } from '../lib/optics'
 import HorizonEditor from './HorizonEditor'
+import { navigate } from '../lib/router'
+import { siteShareUrl } from '../lib/siteShare'
 import type { useStore } from '../lib/store'
 
 type Store = ReturnType<typeof useStore>
@@ -129,8 +131,22 @@ async function makeSite(name: string, lat: number, lon: number): Promise<Locatio
   return { id: crypto.randomUUID(), name, lat: +lat.toFixed(4), lon: +lon.toFixed(4), elevation: elevation ?? 0, horizon: [], seeing: 3, tz: tzFromCoords(lat, lon), bortle: ratio != null ? Math.round(bortleOf(sqmOf(ratio))) : undefined }
 }
 
-export default function SiteView({ store }: { store: Store }) {
-  const loc = store.active
+/** The link to send someone for this site, with a copy button. */
+function ShareSite({ loc }: { loc: Location }) {
+  const [copied, setCopied] = useState('')
+  const url = siteShareUrl(loc)
+  async function copy() {
+    try { await navigator.clipboard.writeText(url); setCopied(url) } catch { /* the field stays selectable */ }
+  }
+  return <div className="sshare row wrap"><input readOnly value={url} onFocus={(e) => e.target.select()} /><button onClick={copy}>{copied === url ? 'Copied' : 'Copy link'}</button>
+    <small className="note">Anyone with the link sees this site’s sky, light domes and horizon, no account needed. It carries the exact coordinates.</small></div>
+}
+
+/** The site page: the active site, editable, or (shared) a site from a link, read-only, that the visitor can save. */
+export default function SiteView({ store, shared }: { store: Store; shared?: Location }) {
+  const loc = shared ?? store.active
+  const ro = !!shared
+  const [sharing, setSharing] = useState(false)
   const minAlt = store.settings.minAlt
   const [sky, setSky] = useState<SiteSky | null | 'loading'>('loading')
   const [names, setNames] = useState<Record<string, string>>({})
@@ -157,9 +173,10 @@ export default function SiteView({ store }: { store: Store }) {
 
   useEffect(() => {
     let live = true
+    if (ro) return
     Promise.all(store.locations.map(async (l) => [l.id, await lpRatio(l.lat, l.lon).catch(() => null)] as const)).then((r) => live && setOthers(Object.fromEntries(r)))
     return () => { live = false }
-  }, [store.locations])
+  }, [store.locations, ro])
 
   // the map: dark base, the atlas on top, the site, its domes and a probe point
   const el = useRef<HTMLDivElement>(null)
@@ -245,12 +262,24 @@ export default function SiteView({ store }: { store: Store }) {
     navigator.geolocation.getCurrentPosition((p) => { setMsg(''); void addAt(p.coords.latitude, p.coords.longitude) }, (e) => setMsg(e.message), { enableHighAccuracy: true, timeout: 15000 })
   }
   const home = store.locations.find((l) => l.id === store.homeId)
+  // a shared site the visitor already has (same spot to ~10 m)
+  const mineAlready = ro ? store.locations.find((l) => Math.abs(l.lat - loc.lat) < 1e-4 && Math.abs(l.lon - loc.lon) < 1e-4) : undefined
+  function saveShared() {
+    const l: Location = { ...loc, id: crypto.randomUUID(), glow: undefined }
+    store.addLocation(l)
+    navigate('/account/sites')
+  }
   const kmFrom = (a: Location, b: Location) => Math.hypot((a.lat - b.lat) * 111.2, (a.lon - b.lon) * 111.2 * Math.cos((a.lat * Math.PI) / 180))
 
   return (
     <div className="site">
-      <div className="ch wrap"><h2 className="th">Site <small>light pollution · light domes</small></h2><span className="sp" />
-        <select value={loc.id} onChange={(e) => store.setActive(e.target.value)}>{store.locations.map((l) => <option key={l.id} value={l.id}>{l.id === store.homeId ? '★ ' : ''}{l.name}</option>)}</select></div>
+      <div className="ch wrap"><h2 className="th">{ro ? 'Shared site' : 'Site'} <small>light pollution · light domes</small></h2><span className="sp" />
+        {ro ? (mineAlready
+          ? <button onClick={() => { store.setActive(mineAlready.id); navigate('/account/sites') }}>Open in my sites</button>
+          : <button onClick={saveShared} title="Plan tonight, targets and exposures from this site">＋ Save to my sites</button>)
+          : <><select value={loc.id} onChange={(e) => store.setActive(e.target.value)}>{store.locations.map((l) => <option key={l.id} value={l.id}>{l.id === store.homeId ? '★ ' : ''}{l.name}</option>)}</select><button className={sharing ? 'on' : ''} onClick={() => setSharing(!sharing)} title="A link anyone can open, no account needed">🔗 Share</button></>}
+      </div>
+      {!ro && sharing && <ShareSite loc={loc} />}
 
       <div className="sgrid">
         <section className="card smap">
@@ -262,11 +291,12 @@ export default function SiteView({ store }: { store: Store }) {
         <div className="scol">
           <section className="card">
             <h3>{loc.name} <small>{loc.lat.toFixed(4)}, {loc.lon.toFixed(4)}</small></h3>
+            {ro && <p className="note">{Math.round(loc.elevation)} m · {loc.tz ?? tzOf(loc)} · horizon {loc.horizon.length ? `profile of ${loc.horizon.length} points` : 'flat'}{loc.bortle ? ` · set as Bortle ${loc.bortle}` : ''}</p>}
             {sky === 'loading' ? <p className="note">Reading the light-pollution atlas…</p>
               : !s ? <p className="note">No atlas data here (it covers 65°S–75°N) or no connection.</p>
               : <>
                 <Quality ratio={s.ratio} />
-                {roundB !== loc.bortle && <div className="row wrap"><small className="note">Exposure estimates use {loc.bortle ? `Bortle ${loc.bortle}` : 'an assumed Bortle 5'} for this site.</small>
+                {!ro && roundB !== loc.bortle && <div className="row wrap"><small className="note">Exposure estimates use {loc.bortle ? `Bortle ${loc.bortle}` : 'an assumed Bortle 5'} for this site.</small>
                   <button onClick={() => store.saveLocation({ ...loc, bortle: roundB })}>Use Bortle {roundB}</button></div>}
               </>}
           </section>
@@ -279,7 +309,7 @@ export default function SiteView({ store }: { store: Store }) {
                 {s && <p className="note">{Math.abs(sqmOf(probe.ratio) - s.sqm) < 0.05 ? 'About the same sky as your site.'
                   : sqmOf(probe.ratio) > s.sqm ? <><b className="gt ok">{(sqmOf(probe.ratio) - s.sqm).toFixed(2)} mag darker</b>: the sky background is {Math.round((1 - 10 ** (-0.4 * (sqmOf(probe.ratio) - s.sqm))) * 100)}% fainter, so unfiltered exposures get there up to ~{(10 ** (0.4 * (sqmOf(probe.ratio) - s.sqm))).toFixed(1)}× sooner.</>
                   : <><b className="gt bad">{(s.sqm - sqmOf(probe.ratio)).toFixed(2)} mag brighter</b> than your site.</>}</p>}
-                <div className="row wrap"><button onClick={newSite}>+ Save as new site</button><button onClick={moveSite}>Move {loc.name} here</button></div>
+                <div className="row wrap"><button onClick={newSite}>+ Save as new site</button>{!ro && <button onClick={moveSite}>Move {loc.name} here</button>}</div>
               </>}
             </section>
           )}
@@ -310,17 +340,17 @@ export default function SiteView({ store }: { store: Store }) {
               </ul>
             )}
             <p className="note">{above === 0 ? `Your ${minAlt}° minimum already clears every light dome here.` : <>Domes reach above your {minAlt}° minimum over about {above * 10}° of the horizon; the {minAlt}° circle is enough elsewhere.</>}</p>
-            <div className="row wrap">
+            {!ro && <div className="row wrap">
               {!sameGlow && <button onClick={() => store.saveLocation({ ...loc, glow: s.domeAlt })} title="Targets count as usable only above the light domes (in addition to the horizon and minimum altitude)">{glowSet ? '↻ Update planning limits' : 'Use domes as planning limits'}</button>}
               {glowSet && <button onClick={() => store.saveLocation({ ...loc, glow: undefined })}>Stop using domes</button>}
               {glowSet && <small className="note">{sameGlow ? '✓ Tonight, the planner and the altitude charts' : 'Saved limits differ from this reading'} keep targets above the domes.</small>}
-            </div>
+            </div>}
             <p className="note fine">A rough model: towns brighter than your site count by their excess brightness and distance (glow ∝ d^−2.5) and are scaled to your site’s own sky glow; a nearby town’s dome stands higher than a distant city’s. A dome counts up to where it adds {Math.round(DOME_LEVEL * 100)}% to the sky behind it (≈ +{(2.5 * Math.log10(1 + DOME_LEVEL)).toFixed(2)} mag). Terrain, trees, local lights and haze are not included, and on hazy nights domes reach higher. Town names: © OpenStreetMap contributors.</p>
           </section>
         </div>
       )}
 
-      <div className="sgrid">
+      {!ro && <div className="sgrid">
         <section className="card">
           <h3>Your sites</h3>
           <table className="ssites"><thead><tr><th /><th>Site</th><th>SQM</th><th>Bortle ≈</th><th>Set</th><th>{home ? `From ${home.name}` : ''}</th></tr></thead><tbody>
@@ -348,7 +378,8 @@ export default function SiteView({ store }: { store: Store }) {
           <p className="note fine">Or click the map and choose “Save as new site”. Elevation, time zone and sky darkness are filled in for you. Place search: © OpenStreetMap contributors.</p>
         </section>
         <SiteDetails loc={loc} store={store} />
-      </div>
+      </div>}
+      {ro && <p className="note">Shared from <a href="/">Owl Astro</a>, an astrophotography planner. Save the site to plan your nights from it: what is up, how high, the Moon and the cloud forecast.</p>}
       <p className="note fine">Sky brightness: <a href="https://djlorenz.github.io/astronomy/lp/" target="_blank" rel="noreferrer">{LP_CREDIT}</a>. Zenith values, moonless and clear; real nights vary with haze, snow and the time of night.</p>
     </div>
   )

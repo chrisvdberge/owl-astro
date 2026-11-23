@@ -56,6 +56,13 @@ longest sub, the one with the most dynamic range wins, else the high-conversion-
 model (site Bortle, the camera's scope from My gear, filter, colour or mono). Read noise and full well per gain are approximated from
 the makers' charts in `app/src/lib/gain.ts`.
 
+## Sharing a site
+
+Account → My sites → 🔗 Share gives a link anyone can open, signed in or not: `/site?n=<name>&lat&lon&el&tz&s&b&hz=az_alt~az_alt…`.
+The whole site (coordinates, elevation, time zone, seeing, Bortle, horizon profile) rides in the URL, so nothing is stored
+and no account is needed (`app/src/lib/siteShare.ts`). The visitor sees the site page read-only (sky quality, light domes,
+directions) and can save it to their own sites.
+
 ## Image review
 
 Tools → Image review (`/tools/review`) gives feedback on a finished (stretched) JPEG, PNG or WebP image from its pixels alone, in the browser

@@ -37,6 +37,7 @@ import MosaicCheck from './components/MosaicCheck'
 import SharedReview from './components/SharedReview'
 import GearPlanner from './components/GearPlanner'
 import SiteView from './components/SiteView'
+import { siteFromQuery } from './lib/siteShare'
 import AccountHome from './components/AccountHome'
 import MyGear from './components/MyGear'
 import GuideComments from './components/GuideComments'
@@ -47,7 +48,7 @@ import { defaultPatch, gearNames, setupLabel } from './lib/gear'
 import { analyseSite } from './lib/lightpollution'
 
 
-type View = 'tonight' | 'sky' | 'targets' | 'browse' | 'comets' | 'events' | 'plan' | 'log' | 'gear' | 'sites' | 'inspector' | 'review' | 'mosaic' | 'shared' | 'iso' | 'gain' | 'account' | 'mygear' | 'comments'
+type View = 'tonight' | 'sky' | 'targets' | 'browse' | 'comets' | 'events' | 'plan' | 'log' | 'gear' | 'sites' | 'inspector' | 'review' | 'mosaic' | 'shared' | 'siteshare' | 'iso' | 'gain' | 'account' | 'mygear' | 'comments'
 const nameOf = (o: CatObject) => (isCustom(o.id) ? o.names[0] : o.m ?? o.id)
 /** One-line summary for identifying an object on the sky: type, magnitude, size. */
 const objFacts = (o: CatObject) => [o.typeName, o.mag != null && `${o.mag.toFixed(1)} mag`, o.maj != null && `${+o.maj.toFixed(1)}′${o.min != null && o.min !== o.maj ? `×${+o.min.toFixed(1)}′` : ''}`].filter(Boolean).join(' · ')
@@ -112,8 +113,9 @@ export default function App() {
   // the page comes from the URL: /tonight[/date], /sky[/target], /targets[/browse|comets|events], /plan, /log, /account[/gear|sites], /tools/{gear,inspector,review,mosaic,iso[/camera],gain[/camera]}
   const route = useRoute()
   const [p0, p1] = route.path
-  const view: View = p0 === 'sky' ? 'sky' : p0 === 'targets' ? (p1 === 'browse' ? 'browse' : p1 === 'comets' ? 'comets' : p1 === 'events' ? 'events' : 'targets') : p0 === 'plan' ? 'plan' : p0 === 'log' ? 'log' : p0 === 'r' && p1 ? 'shared'
+  const view: View = p0 === 'sky' ? 'sky' : p0 === 'targets' ? (p1 === 'browse' ? 'browse' : p1 === 'comets' ? 'comets' : p1 === 'events' ? 'events' : 'targets') : p0 === 'plan' ? 'plan' : p0 === 'log' ? 'log' : p0 === 'r' && p1 ? 'shared' : p0 === 'site' ? 'siteshare'
     : p0 === 'account' ? (p1 === 'gear' ? 'mygear' : p1 === 'sites' ? 'sites' : p1 === 'comments' ? 'comments' : 'account') : p0 === 'tools' ? (p1 === 'inspector' ? 'inspector' : p1 === 'review' ? 'review' : p1 === 'mosaic' ? 'mosaic' : p1 === 'iso' ? 'iso' : p1 === 'gain' ? 'gain' : 'gear') : 'tonight'
+  const sharedSite = useMemo(() => (view === 'siteshare' ? siteFromQuery(route.query) : null), [view, route.query])
   const section = view === 'browse' || view === 'comets' || view === 'events' ? 'targets' : ['account', 'mygear', 'sites', 'comments'].includes(view) ? 'account' : ['gear', 'inspector', 'review', 'mosaic', 'iso', 'gain'].includes(view) ? 'tools' : view
   // addresses from before the account pages (bookmarks, the installed app)
   useEffect(() => {
@@ -1018,7 +1020,7 @@ export default function App() {
       <header>
         <Link to="/tonight" className="brand"><img src="/favicon.svg" alt="" width={26} height={26} />Owl Astro</Link>
         <nav className="nav">{NAV.map(([id, to, name]) => <Link key={id} to={to} className={section === id ? 'on' : ''}>{name}{id === 'targets' && store.wishlist.length ? <small>{store.wishlist.length}</small> : null}</Link>)}</nav>
-        <span className="here">{view === 'browse' || view === 'comets' || view === 'events' ? 'Targets' : view === 'sites' ? 'My sites' : view === 'mygear' ? 'My gear' : view === 'comments' ? 'Comments' : view === 'account' ? 'Account' : view === 'gear' ? 'Gear planner' : view === 'inspector' ? 'Inspector' : view === 'review' ? 'Image review' : view === 'mosaic' ? 'Mosaic check' : view === 'shared' ? 'Shared review' : view === 'iso' ? 'Best ISO' : view === 'gain' ? 'Best gain' : NAV.find(([id]) => id === view)?.[2]}</span>
+        <span className="here">{view === 'browse' || view === 'comets' || view === 'events' ? 'Targets' : view === 'sites' ? 'My sites' : view === 'mygear' ? 'My gear' : view === 'comments' ? 'Comments' : view === 'account' ? 'Account' : view === 'gear' ? 'Gear planner' : view === 'inspector' ? 'Inspector' : view === 'review' ? 'Image review' : view === 'mosaic' ? 'Mosaic check' : view === 'shared' ? 'Shared review' : view === 'siteshare' ? 'Shared site' : view === 'iso' ? 'Best ISO' : view === 'gain' ? 'Best gain' : NAV.find(([id]) => id === view)?.[2]}</span>
         <span className="sp" />
         {!online && <span className="offline" title="No connection: planning works, forecasts, survey images and sync resume when you are back online">Offline</span>}
         <SiteSwitcher store={store} />
@@ -1058,6 +1060,8 @@ export default function App() {
       {view === 'review' && <main className="pmain"><ImageReview user={auth.user} store={store} catalog={catalog} /></main>}
       {view === 'mosaic' && <main className="pmain"><MosaicCheck store={store} catalog={catalog} /></main>}
       {view === 'shared' && <main className="pmain"><SharedReview token={p1} catalog={catalog} /></main>}
+      {view === 'siteshare' && <main className="pmain">{sharedSite ? <SiteView key={route.href} store={store} shared={sharedSite} />
+        : <div className="site"><h2 className="th">Site not found</h2><p className="note">This link has no valid coordinates. <Link to="/account/sites">Your sites</Link>.</p></div>}</main>}
       {view === 'iso' && <main className="pmain"><BestIso store={store} cameraId={route.path[2]} /></main>}
       {view === 'gain' && <main className="pmain"><BestGain store={store} cameraId={route.path[2]} /></main>}
       {section === 'account' && (

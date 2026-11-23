@@ -49,6 +49,13 @@ export const PRESETS: Preset[] = [
     optics: { apertureMm: 35, focalLengthMm: 150, sensorWmm: 7.68, sensorHmm: 4.32, pixelUm: 2, binning: 1, drizzle: 1, reducer: 1, qe: 0.7, readNoise: 1.0, fullWell: 11000, bits: 12 },
   },
   {
+    id: 'dwarf-draco',
+    label: 'Dwarf Draco (telephoto)',
+    // 90 mm, 340 mm f/3.8 (1,200 mm equivalent); 50.33 MP 1/1.3" sensor = 8192x6144 @ 1.2 µm (9.83 x 7.37 mm), saved as 12 MP,
+    // i.e. 4096x3072 @ 2.4 µm (2x2 binned). Dwarflab doesn't name the sensor: QE, read noise and full well are estimates
+    optics: { apertureMm: 90, focalLengthMm: 340, sensorWmm: 9.8304, sensorHmm: 7.3728, pixelUm: 2.4, binning: 1, drizzle: 1, reducer: 1, qe: 0.75, readNoise: 1.5, fullWell: 24000, bits: 12 },
+  },
+  {
     id: 'custom',
     label: 'Custom',
     optics: { apertureMm: 100, focalLengthMm: 550, sensorWmm: 23.5, sensorHmm: 15.7, pixelUm: 3.76, binning: 1, drizzle: 1, reducer: 1 },

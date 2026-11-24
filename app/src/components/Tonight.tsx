@@ -1,11 +1,13 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import * as Astronomy from 'astronomy-engine'
-import { extraObject, isCustom, searchCatalog, type CatObject } from '../lib/catalog'
+import { extraObject, extraOf, isCustom, searchCatalog, type CatObject } from '../lib/catalog'
+import { cometId, cometObject, cometPos, loadComets, loadSightings, remember } from '../lib/comets'
+import { daysSince, isSupernova, loadSupernovae, snObject } from '../lib/supernovae'
 import { targetAltAz } from '../lib/astro'
 import { compute, framingFit } from '../lib/optics'
 import { clockIn, nightNow, tzOf } from '../lib/tz'
 import { meanCloud, useCloud } from '../lib/weather'
-import { ephemeris, rankBonus, scoreNights, type NightResult } from '../lib/suitability'
+import { COMET_LIMIT, ephemeris, rankBonus, scoreNights, type NightResult } from '../lib/suitability'
 import { defaultSurvey } from '../lib/surveys'
 import { cutoutUrl } from '../lib/hips2fits'
 import { filterShort } from '../lib/filters'
@@ -25,10 +27,17 @@ const FILTERS = [
   { id: 'galaxies', label: 'Galaxies', test: (o: CatObject) => o.type.startsWith('G') },
   { id: 'nebulae', label: 'Nebulae', test: (o: CatObject) => ['HII', 'EmN', 'RfN', 'DrkN', 'Neb', 'PN', 'SNR', 'Cl+N'].includes(o.type) },
   { id: 'clusters', label: 'Clusters', test: (o: CatObject) => ['OCl', 'GCl', '*Ass', 'Cl+N'].includes(o.type) },
+  { id: 'comets', label: 'Comets', test: (o: CatObject) => !!o.comet },
+  { id: 'sn', label: 'Supernovae', test: (o: CatObject) => isSupernova(o.id) },
 ]
+const SN_LIMIT = 16   // faintest supernova listed (latest reported magnitude)
+const SN_DAYS = 45    // …and only while it was reported within this many days
+const LIVE_BONUS = 3  // comets and supernovae do not wait for next year: rank them a little up
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '')
 
 const label = (o: CatObject) => (isCustom(o.id) ? o.names[0] : o.m ? o.m.replace(' ', '') : o.id.replace(' ', ''))
 const longName = (o: CatObject) => (isCustom(o.id) ? o.names[0] : o.names[0] ? `${label(o)} - ${o.names[0]}` : label(o))
+const daysAgo = (d: number) => (d <= 0 ? 'today' : d === 1 ? 'yesterday' : `${d} days ago`)
 const dur = (min: number) => `${Math.floor(min / 60)}h ${String(Math.round(min % 60)).padStart(2, '0')}m`
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const parse = (s: string) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d) }
@@ -59,11 +68,30 @@ export default function Tonight({ store, catalog, scope, onShow, onDetails, onSk
   const drag = useRef<{ id: string; mode: 'move' | 'start' | 'end'; y0: number; s0: number; e0: number; lo: number; hi: number } | null>(null)
   const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(''), 3000) }
 
+  // comets bright enough to image (observed brightness where COBS has one) and recent bright supernovae
+  const [live, setLive] = useState<CatObject[]>([])
+  useEffect(() => {
+    let dead = false
+    const comets = Promise.all([loadComets(), loadSightings()]).then(([all, seen]) => {
+      const now = Date.now()
+      return all.flatMap((c) => {
+        const p = cometPos(c.el, now), obs = seen.get(cometId(c.desig))
+        if ((obs?.mag ?? p.mag) > COMET_LIMIT) return []
+        const c2 = { ...c, dm: obs ? +(obs.mag - p.mag).toFixed(2) : undefined }
+        remember(c2) // so details and the sky view find it with its observed offset
+        return [cometObject(c2)]
+      })
+    }).catch(() => [] as CatObject[])
+    const sne = loadSupernovae().then((l) => l.filter((x) => x.mag <= SN_LIMIT && daysSince(x.last) <= SN_DAYS).map(snObject))
+    Promise.all([comets, sne]).then(([a, b]) => { if (!dead) setLive([...a, ...b]) })
+    return () => { dead = true }
+  }, [])
+  const liveById = useMemo(() => new Map(live.map((o) => [o.id, o])), [live])
   const byId = useMemo(() => new Map(catalog.map((o) => [o.id, o])), [catalog])
   const wishById = useMemo(() => new Map(wishlist.map((w) => [w.id, w])), [wishlist])
   const lookup = (id: string): CatObject | undefined => {
     const w = wishById.get(id)
-    return byId.get(id) ?? (w ? extraObject(w) : undefined)
+    return byId.get(id) ?? (w ? extraObject(w) : undefined) ?? liveById.get(id)
   }
   const fov = useMemo(() => compute(scope.optics, 3), [scope])
   const now = Date.now()
@@ -114,16 +142,19 @@ export default function Tonight({ store, catalog, scope, onShow, onDetails, onSk
   const pool = useMemo(() => {
     const seen = new Set<string>(), out: CatObject[] = []
     const add = (o?: CatObject) => { if (o && !seen.has(o.id)) { seen.add(o.id); out.push(o) } }
-    if (query.trim().length >= 2) searchCatalog(catalog, query, 40).forEach(add)
-    else { wishlist.filter((w) => w.status !== 'done').forEach((w) => add(lookup(w.id))); popular.forEach(add) }
+    if (query.trim().length >= 2) {
+      const q = norm(query)
+      live.filter((o) => [...o.names, ...o.alt].some((n) => norm(n).includes(q))).forEach(add)
+      searchCatalog(catalog, query, 40).forEach(add)
+    } else { wishlist.filter((w) => w.status !== 'done').forEach((w) => add(lookup(w.id))); live.forEach(add); popular.forEach(add) }
     return out
-  }, [catalog, query, wishlist, popular]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [catalog, query, wishlist, popular, live]) // eslint-disable-line react-hooks/exhaustive-deps
   const cands: Cand[] = useMemo(() => pool.map((o) => {
     const w = wishById.get(o.id)
     const r = scoreNights(loc, o, nights, settings, w?.moon)[0]
     const c = cloud ? meanCloud(cloud, samples.filter((_, i) => r.usable[i]).map((s) => s.t)) : undefined
-    return { o, w, r, cloud: c, eff: (c === undefined ? r.score : r.score * (1 - c / 100)) + (w ? rankBonus(w) + 4 : 0) }
-  }), [pool, wishById, loc, nights, settings, cloud, samples])
+    return { o, w, r, cloud: c, eff: (c === undefined ? r.score : r.score * (1 - c / 100)) + (w ? rankBonus(w) + 4 : 0) + (liveById.has(o.id) ? LIVE_BONUS : 0) }
+  }), [pool, wishById, liveById, loc, nights, settings, cloud, samples])
   const up = cands.filter((c) => c.r.suitable).length
   const listed = cands
     .filter((c) => FILTERS.find((f) => f.id === filter)!.test(c.o) && (!hideBlocked || c.r.suitable))
@@ -214,7 +245,7 @@ export default function Tonight({ store, catalog, scope, onShow, onDetails, onSk
   const nowMin = (now - base) / 60000
   const isToday = night === today && nowMin >= r0 && nowMin <= r1
 
-  const thumbFor = (o: CatObject, w?: WishItem) => w?.framings?.[0]?.thumb ?? (isCustom(o.id) ? undefined : cutoutUrl(defaultSurvey(o), o.ra, o.dec, Math.max(fov.fovW * 1.5, ((o.maj ?? 0) / 60) * 1.4), 128, 72))
+  const thumbFor = (o: CatObject, w?: WishItem) => w?.framings?.[0]?.thumb ?? (isCustom(o.id) && !isSupernova(o.id) ? undefined : cutoutUrl(defaultSurvey(o), o.ra, o.dec, Math.max(fov.fovW * 1.5, ((o.maj ?? 0) / 60) * 1.4), 128, 72))
   const fitBadge = (o: CatObject) => {
     const f = framingFit(o.maj, o.min, fov.fovW, fov.fovH)
     if (!f) return null
@@ -265,15 +296,15 @@ export default function Tonight({ store, catalog, scope, onShow, onDetails, onSk
                   {thumb ? <img src={thumb} crossOrigin="anonymous" alt="" loading="lazy" onClick={() => onShow(c.o, c.w?.framings?.[0]?.id)} /> : <span className="ph" />}
                   <div className="nmeta">
                     <button className="title" onClick={() => onDetails(c.o)}><b>{longName(c.o)}</b></button>
-                    <small>{c.o.typeName}{c.o.mag != null ? ` · mag ${c.o.mag}` : ''}</small>
+                    <small>{c.o.typeName}{c.o.mag != null ? ` · mag ${c.o.mag}` : ''}{c.o.comet ? (c.o.comet.dm == null ? ' predicted' : ' observed') : ''}{c.o.sn ? ` · found ${daysAgo(daysSince(c.o.sn.found))}` : ''}</small>
                     <small className="nchips">
                       {c.r.suitable ? <>↑ {Math.round(c.r.peakAlt)}° · {clockIn(tz, c.r.peakAt)}</> : <>below {settings.minAlt}° / no dark time</>}
                       {badge && <em className={`badge2 ${badge.cls}`}>{badge.text}</em>}
-                      <em className="badge2 mute">{filterShort(c.o.type)}</em>
+                      {c.o.comet || c.o.sn ? <em className="badge2 new">{c.o.comet ? 'comet' : 'supernova'}</em> : <em className="badge2 mute">{filterShort(c.o.type)}</em>}
                       {c.r.moonPenalty > 0.3 && <em className="badge2 warn">moon</em>}
                     </small>
                   </div>
-                  <button className={`star ${c.w ? 'on' : ''}`} title={c.w ? 'On your wishlist' : 'Add to wishlist'} onClick={() => (c.w ? confirm(`Remove ${label(c.o)} from your wishlist?`) && store.removeWish(c.o.id) : store.addWish(c.o.id))}>{c.w ? '★' : '☆'}</button>
+                  <button className={`star ${c.w ? 'on' : ''}`} title={c.w ? 'On your wishlist' : 'Add to wishlist'} onClick={() => (c.w ? confirm(`Remove ${label(c.o)} from your wishlist?`) && store.removeWish(c.o.id) : store.addWish(c.o.id, extraOf(c.o)))}>{c.w ? '★' : '☆'}</button>
                   <button title="Details" onClick={() => onDetails(c.o)}>ⓘ</button>
                   {inPlan
                     ? <button className="plus done" title="Scheduled — click to remove" onClick={() => store.removeBlocksFor(night, c.o.id)}>✓</button>

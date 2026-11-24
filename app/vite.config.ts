@@ -2,6 +2,7 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import { cutout } from './worker/cutout.ts'
+import { supernovae } from './worker/supernovae.ts'
 
 const WEEK = 7 * 24 * 3600
 const cors200 = { statuses: [200] } // only real (CORS) responses: opaque ones count several MB each against the storage quota
@@ -16,6 +17,13 @@ export default defineConfig({
       configureServer(server) {
         server.middlewares.use('/api/cutout', async (req, res) => {
           const r = await cutout(new URL(req.url ?? '', 'http://dev').searchParams)
+          res.statusCode = r.status
+          r.headers.forEach((v, k) => res.setHeader(k, v))
+          res.end(Buffer.from(await r.arrayBuffer()))
+        })
+        // and /api/supernovae the worker's supernova list (worker/supernovae.ts)
+        server.middlewares.use('/api/supernovae', async (_req, res) => {
+          const r = await supernovae()
           res.statusCode = r.status
           r.headers.forEach((v, k) => res.setHeader(k, v))
           res.end(Buffer.from(await r.arrayBuffer()))
@@ -49,7 +57,8 @@ export default defineConfig({
         navigateFallback: '/index.html',
         cleanupOutdatedCaches: true,
         runtimeCaching: [
-          // forecast and comet brightness: fresh when online, the last one when not
+          // forecast, comet brightness and supernovae: fresh when online, the last one when not
+          { urlPattern: ({ url }) => url.pathname === '/api/supernovae', handler: 'NetworkFirst', options: { cacheName: 'supernovae', networkTimeoutSeconds: 6, expiration: { maxEntries: 2, maxAgeSeconds: WEEK } } },
           { urlPattern: ({ url }) => url.pathname === '/api/cobs/comets', handler: 'NetworkFirst', options: { cacheName: 'comets', networkTimeoutSeconds: 6, expiration: { maxEntries: 2, maxAgeSeconds: WEEK } } },
           { urlPattern: /^https:\/\/api\.open-meteo\.com\//, handler: 'NetworkFirst', options: { cacheName: 'forecast', networkTimeoutSeconds: 6, expiration: { maxEntries: 20, maxAgeSeconds: 24 * 3600 }, cacheableResponse: cors200 } },
           // survey tiles for the places you looked at, so the sky view still shows them in the field

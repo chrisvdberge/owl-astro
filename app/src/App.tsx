@@ -25,6 +25,7 @@ import Comets from './components/Comets'
 import Events from './components/Events'
 import type { SkyEvent } from './lib/events'
 import { cometObject, isComet, loadComets, loadSightings, loadedComet } from './lib/comets'
+import { isSupernova, loadSupernovae, loadedSupernova, snObject } from './lib/supernovae'
 import DepthMap from './components/DepthMap'
 import { DEFAULT_BORTLE } from './lib/exposure'
 import { cropAtDepth } from './lib/depth'
@@ -134,12 +135,18 @@ export default function App() {
   const customs = useMemo(() => {
     const own = store.wishlist.flatMap((w) => { const o = extraObject(w); return o ? [o] : [] })
     // a comet opened from the comet list (or a shared link) before it is one of your targets
-    const slugs = [route.query.get('target'), p0 === 'sky' ? p1 : null].filter((x): x is string => !!x && isComet(x) && !own.some((o) => o.id === x))
-    return [...own, ...slugs.flatMap((id) => { const c = loadedComet(id); return c ? [cometObject(c)] : [] })]
+    // and a supernova opened from Tonight's list
+    const slugs = [route.query.get('target'), p0 === 'sky' ? p1 : null].filter((x): x is string => !!x && (isComet(x) || isSupernova(x)) && !own.some((o) => o.id === x))
+    return [...own, ...slugs.flatMap((id) => {
+      if (isSupernova(id)) { const s = loadedSupernova(id); return s ? [snObject(s)] : [] }
+      const c = loadedComet(id); return c ? [cometObject(c)] : []
+    })]
   }, [store.wishlist, route.query, p0, p1, cometsTick]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    const ids = [route.query.get('target'), p0 === 'sky' ? p1 : null].filter((x): x is string => !!x && isComet(x))
-    if (ids.some((id) => !customs.some((o) => o.id === id))) Promise.all([loadComets(), loadSightings()]).then(() => setCometsTick((n) => n + 1)).catch(() => {})
+    const ids = [route.query.get('target'), p0 === 'sky' ? p1 : null].filter((x): x is string => !!x && (isComet(x) || isSupernova(x)))
+    const missing = ids.filter((id) => !customs.some((o) => o.id === id))
+    if (missing.some(isComet)) Promise.all([loadComets(), loadSightings()]).then(() => setCometsTick((n) => n + 1)).catch(() => {})
+    if (missing.some(isSupernova)) loadSupernovae().then(() => { if (missing.some((id) => loadedSupernova(id))) setCometsTick((n) => n + 1) })
   }, [route.query, p0, p1, customs])
   // target details open over any page as ?target=m31: back closes them and the link can be shared
   const detailSlug = route.query.get('target')

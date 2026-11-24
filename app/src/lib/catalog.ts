@@ -1,4 +1,5 @@
 import { cometObject, isComet, type CometTarget } from './comets'
+import type { Supernova } from './supernovae'
 
 export interface CatObject {
   id: string; m: string | null; type: string; typeName: string
@@ -11,6 +12,8 @@ export interface CatObject {
   /** comets: expected magnitude at a moment */
   magAt?: (t: Date) => number
   comet?: CometTarget
+  /** supernovae opened from the live list (as targets they are custom fields named "SN …") */
+  sn?: Supernova
 }
 
 /** A user-named field that is not a catalog object (a frame on a star field, a Milky Way patch…). */
@@ -21,7 +24,7 @@ export const isCustom = (id: string) => id.startsWith('custom:') || isComet(id)
 
 /** Catalog-shaped stand-in so custom fields flow through the planner and sky view like any object. */
 export const customObject = (id: string, c: CustomTarget): CatObject => ({
-  id, m: null, type: 'Other', typeName: 'Custom field', ra: c.ra, dec: c.dec, con: c.con,
+  id, m: null, type: id.startsWith('custom:sn-') ? 'SN' : 'Other', typeName: id.startsWith('custom:sn-') ? 'Supernova' : 'Custom field', ra: c.ra, dec: c.dec, con: c.con,
   maj: null, min: null, pa: null, mag: null, sb: null, names: [c.name], alt: [],
 })
 

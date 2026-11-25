@@ -29,6 +29,8 @@ export const APOD_NAMES = {
   zulualpha: /Zulu\s?Alpha/i,
   artesky: /Artesky/i,
   easyscopes: /Easy\s?Scopes/i,
+  // case-sensitive: "one thing" is a common phrase
+  onething: /One\s?Thing Observatory|onethingastro/,
 }
 
 const decode = (s) => s.replace(/<[^>]+>/g, ' ').replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n))

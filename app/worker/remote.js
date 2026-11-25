@@ -149,10 +149,12 @@ async function nebulaNest() {
 /**
  * ZuluAlpha (zulualpha.co.za/site-status): the site's CloudWatcher, through the endpoint its public status page reads.
  * "clear" is their own verdict for observing (at most 20% estimated cloud, from the sky temperature); clouds_safe is the
- * roof's safety limit, which stays safe under skies too cloudy to image.
+ * roof's safety limit, which stays safe under skies too cloudy to image. The roof comes from a status file that needs no
+ * login but isn't linked from the page; without it the weather still counts.
  */
 async function zuluAlpha() {
-  const d = await getJson('https://zulualpha.co.za/wp-json/zulualpha/v1/conditions/latest')
+  const api = 'https://zulualpha.co.za/wp-json/zulualpha/v1'
+  const [d, shed] = await Promise.all([getJson(`${api}/conditions/latest`), getJson(`${api}/status/shed1`).catch(() => null)])
   if (!d.available || !(Date.now() - Date.parse(d.observed_at) < STALE_MS)) throw new Error('weather is stale')
   const n = (v) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v * 100) / 100 : undefined)
   const kmh = (v) => (n(v) == null ? undefined : Math.round((v / 3.6) * 10) / 10)
@@ -163,7 +165,19 @@ async function zuluAlpha() {
     sky_quality: n(d.sky_brightness_mpsas) > 15 ? n(d.sky_brightness_mpsas) : undefined,
   }
   if (typeof d.cloud_good_for_observing === 'boolean') weather.clear = d.cloud_good_for_observing
-  return { roofs: null, weather }
+  return { roofs: zuluAlphaRoofs(shed), weather }
+}
+
+/**
+ * ZuluAlpha's roof, or null while it says nothing about the sky: in preview mode (the building being commissioned, as in
+ * November 2026) it reads CLOSED every night, and a reading past valid_until is old. So tracking starts by itself when
+ * they leave preview mode.
+ */
+export function zuluAlphaRoofs(shed, now = Date.now()) {
+  const r = shed?.roof
+  if (shed?.preview_mode !== false || !r?.valid || !(Date.parse(r.valid_until) > now - STALE_MS)) return null
+  if (r.state !== 'OPEN' && r.state !== 'CLOSED') return null // moving or unknown
+  return [{ building: shed.shed ?? 'Shed1', is_open: r.state === 'OPEN' }]
 }
 
 // slug must match remote_observatories and the site's src/content/observatories/<slug>

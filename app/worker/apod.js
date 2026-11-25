@@ -28,6 +28,7 @@ export const APOD_NAMES = {
   'nebula-nest': /Nebula\s?Nest|Rent An Observatory/i,
   zulualpha: /Zulu\s?Alpha/i,
   artesky: /Artesky/i,
+  easyscopes: /Easy\s?Scopes/i,
 }
 
 const decode = (s) => s.replace(/<[^>]+>/g, ' ').replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n))

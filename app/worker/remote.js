@@ -137,12 +137,32 @@ async function nebulaNest() {
   const weather = {
     temperature: n(d.temp), humidity: n(d.hum), dew_point: n(d.dewp), pressure: n(d.relpress),
     wind_speed: kmh(d.wind), wind_gust: kmh(d.gust),
-    // "clouds" is sky minus ambient: the sky temperature is the sum
-    sky_temp: n(d.clouds) != null && n(d.temp) != null ? Math.round((d.clouds + d.temp) * 10) / 10 : undefined,
+    // "clouds" is the sky temperature, corrected for the air temperature by the CloudWatcher (rawir is the raw one)
+    sky_temp: n(d.clouds),
     // the light sensor reads mag/arcsec² only in the dark; in daylight it bottoms out around 10
     sky_quality: n(d.lightmpsas) > 15 ? d.lightmpsas : undefined,
   }
   if (typeof d.cloudsSafe === 'string') weather.clear = d.cloudsSafe === 'Safe'
+  return { roofs: null, weather }
+}
+
+/**
+ * ZuluAlpha (zulualpha.co.za/site-status): the site's CloudWatcher, through the endpoint its public status page reads.
+ * "clear" is their own verdict for observing (at most 20% estimated cloud, from the sky temperature); clouds_safe is the
+ * roof's safety limit, which stays safe under skies too cloudy to image.
+ */
+async function zuluAlpha() {
+  const d = await getJson('https://zulualpha.co.za/wp-json/zulualpha/v1/conditions/latest')
+  if (!d.available || !(Date.now() - Date.parse(d.observed_at) < STALE_MS)) throw new Error('weather is stale')
+  const n = (v) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v * 100) / 100 : undefined)
+  const kmh = (v) => (n(v) == null ? undefined : Math.round((v / 3.6) * 10) / 10)
+  const weather = {
+    temperature: n(d.ambient_temperature_c), humidity: n(d.humidity_percent), dew_point: n(d.dew_point_c), pressure: n(d.relative_pressure_hpa),
+    wind_speed: kmh(d.wind_speed_kmh), wind_gust: kmh(d.wind_gust_kmh), sky_temp: n(d.sky_temperature_c),
+    // mag/arcsec² only in the dark, as at Nebula Nest
+    sky_quality: n(d.sky_brightness_mpsas) > 15 ? n(d.sky_brightness_mpsas) : undefined,
+  }
+  if (typeof d.cloud_good_for_observing === 'boolean') weather.clear = d.cloud_good_for_observing
   return { roofs: null, weather }
 }
 
@@ -152,6 +172,7 @@ export const OBSERVATORIES = [
   { slug: 'obstech-el-sauce', lat: -30.471, lon: -70.765, read: obstech },
   { slug: 'sierra-remote-observatories', lat: SRO.lat, lon: SRO.lon, read: sro },
   { slug: 'nebula-nest', lat: -36.30, lon: 142.05, read: nebulaNest },
+  { slug: 'zulualpha', lat: -32.3558, lon: 20.6465, read: zuluAlpha },
 ]
 
 /** Solar altitude in degrees (low-precision, ~0.1°: plenty to tell day from night) */

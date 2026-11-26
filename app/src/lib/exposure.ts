@@ -80,7 +80,7 @@ export const SKY_PASS = { none: 1, dual: DUAL_SKY, narrow: 0.03 * 0.9 } as const
  * scattering function for the separation, and for altitude what the frames showed: the sky hardly darkened until the Moon was
  * within ~10° of the horizon, and reached its moonless level a little after moonset.
  */
-const MOON_FULL_MAG = 18.4 // V mag/arcsec² a full Moon high in the sky adds 60° from the target (dark site taken as ~21.3)
+const MOON_FULL_MAG = 18.1 // V mag/arcsec² a full Moon high in the sky adds 60° from the target (calibration site: Bortle 3.5, ~21.05)
 const scatter = (sepDeg: number) => {
   const r = Math.max(10, sepDeg)
   return 10 ** 5.36 * (1.06 + Math.cos((r * Math.PI) / 180) ** 2) + 10 ** (6.15 - r / 40)

@@ -72,13 +72,47 @@ function electronRate(optics: Optics) {
 /** The share of the sky's light a filter lets through: a dual-band filter, or a single 3–7 nm narrowband filter (one line, mono cameras). */
 export const SKY_PASS = { none: 1, dual: DUAL_SKY, narrow: 0.03 * 0.9 } as const
 
+/**
+ * Moonlight scattered onto the sky near the target, as a flux relative to F0 (comparable with 10^(-0.4·skyMag)): 0 with no Moon.
+ * Calibrated on Seestar S50 frames through the LP (dual-band) filter at a dark remote site, from new to full Moon (Nov 2026,
+ * owlastro.com/guides/seestar-lp-filter-moon): a full Moon ~40° from the target made the sky 20–28× its moonless level, an 87 %
+ * Moon 54° away about 6×, a 60 % Moon 83° away about 2.3×. Shape: Allen's lunar phase law for the phase, Krisciunas & Schaefer's
+ * scattering function for the separation, and for altitude what the frames showed: the sky hardly darkened until the Moon was
+ * within ~10° of the horizon, and reached its moonless level a little after moonset.
+ */
+const MOON_FULL_MAG = 18.4 // V mag/arcsec² a full Moon high in the sky adds 60° from the target (dark site taken as ~21.3)
+const scatter = (sepDeg: number) => {
+  const r = Math.max(10, sepDeg)
+  return 10 ** 5.36 * (1.06 + Math.cos((r * Math.PI) / 180) ** 2) + 10 ** (6.15 - r / 40)
+}
+const SCATTER_60 = scatter(60)
+export function moonlight(illum: number, sepDeg = 60, moonAlt = 45): number {
+  if (illum <= 0.005 || moonAlt <= -3) return 0
+  const a = (Math.acos(Math.max(-1, Math.min(1, 2 * illum - 1))) * 180) / Math.PI // phase angle, degrees
+  const phase = 10 ** (-0.4 * (0.026 * a + 4e-9 * a ** 4))
+  return 10 ** (-0.4 * MOON_FULL_MAG) * phase * (scatter(sepDeg) / SCATTER_60) * Math.min(1, (moonAlt + 3) / 13)
+}
+/**
+ * Moonlight is bluish: through a dual-band filter the Hα side brightens about 0.63× as much as the sky in broadband terms, the OIII
+ * side slightly more than 1× (same frames). For Hα-rich targets that's a small advantage, not an escape.
+ */
+export const MOON_DUAL = 0.8
+
+/**
+ * How much of a moonless hour one hour under `light` (from `moonlight`) is worth, when the sky's noise dominates: 1 / (1 + moonlight / sky).
+ * `dual`: through a dual-band filter (emission targets). Under a full Moon at a dark site this is about 0.05–0.1, with or without filter.
+ */
+export const moonWorth = (bortle: number, light: number, dual: boolean) =>
+  1 / (1 + (light * (dual ? MOON_DUAL : 1)) / 10 ** (-0.4 * SKY_MAG[Math.min(9, Math.max(1, Math.round(bortle)))]))
+
 /** Sky background in electrons per second per pixel under a Bortle class, with no moon. */
 export const skyRate = (optics: Optics, bortle: number, pass: number) =>
   electronRate(optics)(F0 * 10 ** (-0.4 * SKY_MAG[Math.min(9, Math.max(1, Math.round(bortle)))]) * pass)
 
 /**
  * Rough integration time to reach a target signal-to-noise per pixel in the stack.
- * Photon shot noise from the object and the sky, plus read noise per sub; the sky is brightened by the moon (`moon` 0..1).
+ * Photon shot noise from the object and the sky, plus read noise per sub. `moon`: the illuminated fraction of a Moon that is up,
+ * about 60° from the target (0 = no Moon); its light adds to the sky as `moonlight` describes, so it costs far more at a dark site.
  * A guide, not a guarantee: real results depend on processing, seeing, gradients and the object's actual brightness.
  */
 export function estimateExposure(o: CatObject, optics: Optics, bortle: number, subSec: number, filter: Filter, moon = 0): ExposureEstimate | null {
@@ -89,7 +123,7 @@ export function estimateExposure(o: CatObject, optics: Optics, bortle: number, s
 
   const rate = electronRate(optics)
   const dual = filter === 'dual'
-  const sky = rate(F0 * 10 ** (-0.4 * skyMag) * (dual ? DUAL_SKY : 1)) * (1 + moon * (dual ? 0.8 : 4))
+  const sky = rate(F0 * (10 ** (-0.4 * skyMag) + moonlight(moon) * (dual ? MOON_DUAL : 1)) * (dual ? DUAL_SKY : 1))
   const rn = optics.readNoise ?? 2
   // how many subs it takes for the background to average smooth: sky shot noise and read noise both beat down as 1/sqrt(N).
   // Smooth is judged against a fixed reference level (a Bortle-5 sky), so darker skies, with less sky noise, need less time

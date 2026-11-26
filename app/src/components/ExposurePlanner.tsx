@@ -20,7 +20,8 @@ export default function ExposurePlanner({ o, store, scope }: { o: CatObject; sto
   const f: Filter = filter === 'auto' ? defaultFilter(o.type) : filter
   const bortle = loc.bortle ?? DEFAULT_BORTLE
   const est = useMemo(() => estimateExposure(o, optics, bortle, sub, f), [o, optics, bortle, sub, f])
-  const withMoon = useMemo(() => estimateExposure(o, optics, bortle, sub, f, 0.6), [o, optics, bortle, sub, f])
+  const withMoon = useMemo(() => estimateExposure(o, optics, bortle, sub, f, 0.5), [o, optics, bortle, sub, f])
+  const withFull = useMemo(() => estimateExposure(o, optics, bortle, sub, f, 1), [o, optics, bortle, sub, f])
   // progress counts only time logged with this setup: other gear collects light at a different rate
   const mine = setupLabel(scope.optics, scope.presetId)
   const have = (wish?.sessions ?? []).filter((s) => s.setup === mine).reduce((a, s) => a + s.hours, 0)
@@ -50,7 +51,7 @@ export default function ExposurePlanner({ o, store, scope }: { o: CatObject; sto
       <p className="note">
         {have > 0 ? <>You have <b>{hrs(have)}</b> logged with this setup. </> : null}
         {other > 0 ? <>{hrs(other)} more with other setups (not counted). </> : null}
-        With a half-lit moon up it takes about ×{(withMoon!.hours.good / good).toFixed(1)} longer.
+        With a half-lit Moon up it takes about ×{(withMoon!.hours.good / good).toFixed(1)} as long, with a full Moon ×{Math.round(withFull!.hours.good / good)}{f === 'dual' ? ', filter or not' : ''}.
       </p>
       <div className="row wrap exctl">
         <label className="note">Sky <select value={loc.bortle ?? ''} onChange={(e) => store.saveLocation({ ...loc, bortle: e.target.value ? +e.target.value : undefined })}>

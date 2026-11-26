@@ -3,6 +3,7 @@ import type { Optics } from './optics'
 import type { GearItem } from './gear'
 import { tzOf, zonedEpoch } from './tz'
 import { limitAlt, moonIllum, separation, type Location } from './astro'
+import { DEFAULT_BORTLE, moonWorth, moonlight } from './exposure'
 
 /** `scope`: the user's default telescope + camera (account setting); the app falls back to the Seestar S50 Pro preset. */
 export interface Settings { minAlt: number; minHours: number; scope?: { presetId: string; optics: Optics }; gear?: GearItem[]; homeId?: string }
@@ -13,7 +14,10 @@ export const rankBonus = (w: { status: string; priority?: string }) => (w.status
 
 export type MoonTolerance = 'tolerant' | 'dark'
 
-/** Emission-type objects tolerate the moon with the dual-band filter; everything else wants a dark sky. */
+/**
+ * Emission-type objects are shot through a dual-band filter, whose Hα side suffers somewhat less from the bluish moonlight; everything
+ * else is broadband. The filter doesn't make the Moon cheap: both lose about the same share of their time (see `moonWorth`).
+ */
 const TOLERANT = new Set(['HII', 'EmN', 'PN', 'SNR', 'Neb', 'Cl+N'])
 export const defaultMoonTolerance = (type: string): MoonTolerance => (TOLERANT.has(type) ? 'tolerant' : 'dark')
 
@@ -61,7 +65,7 @@ export interface NightResult {
   peakAlt: number
   peakAt: number         // epoch ms of the highest usable sample (0 when none)
   moonIllum: number
-  moonPenalty: number    // 0..1
+  moonPenalty: number    // 0..1: the share of the night's usable time the Moon takes away (1 − the time-averaged moonWorth)
   score: number          // 0..100, 0 when below the minimum window
   suitable: boolean
   /** minute offsets from 17:00 where the target is usable; for timelines */
@@ -83,7 +87,8 @@ export function scoreNights(loc: Location, target: Target, nights: EphemNight[],
     const mid = new Date(n.samples[n.samples.length >> 1].t)
     const [ra, dec] = target.track ? target.track(mid) : [target.ra, target.dec]
     const faint = !!target.magAt && target.magAt(mid) > COMET_LIMIT
-    let weighted = 0, raw = 0, peak = 0, peakAt = 0, moonUp = 0, sepSum = 0
+    const bortle = loc.bortle ?? DEFAULT_BORTLE
+    let weighted = 0, raw = 0, peak = 0, peakAt = 0, worthSum = 0
     const usable: boolean[] = []
     for (const e of n.samples) {
       const hz = Astronomy.Horizon(new Date(e.t), obs, ra / 15, dec, 'normal')
@@ -94,13 +99,10 @@ export function scoreNights(loc: Location, target: Target, nights: EphemNight[],
       raw += w
       weighted += e.sun < -18 ? w : w * 0.6
       if (hz.altitude > peak) { peak = hz.altitude; peakAt = e.t }
-      if (e.moonAlt > 0) { moonUp++; sepSum += separation(ra, dec, e.moonRa, e.moonDec) }
+      worthSum += e.moonAlt > -3 ? moonWorth(bortle, moonlight(n.illum, separation(ra, dec, e.moonRa, e.moonDec), e.moonAlt), tol === 'tolerant') : 1
     }
     const samplesUsed = Math.max(1, usable.filter(Boolean).length)
-    const upFrac = moonUp / samplesUsed
-    const sep = moonUp ? sepSum / moonUp : 180
-    const sepFactor = sep < 30 ? 1 : sep > 90 ? 0.3 : 1 - ((sep - 30) / 60) * 0.7
-    const moonPenalty = Math.min(1, n.illum * upFrac * sepFactor * (tol === 'tolerant' ? 0.3 : 1))
+    const moonPenalty = usable.some(Boolean) ? 1 - worthSum / samplesUsed : 0
     const suitable = raw >= s.minHours && !faint
     const hoursScore = Math.min(weighted / 7, 1)
     const altScore = Math.min(Math.max((peak - s.minAlt) / 35, 0), 1)

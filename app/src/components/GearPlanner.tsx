@@ -107,7 +107,8 @@ export default function GearPlanner({ store, catalog, scope }: { store: Store; c
   const loc = store.active
   const [setups, setSetups] = useState<Setup[]>(() => savedSetups<Setup>() ?? [{ ...scope, key: crypto.randomUUID() }, starter()])
   const save = (next: Setup[]) => { setSetups(next); put(SETUPS_KEY, next) }
-  const [cond, setCond] = useState(() => load(COND_KEY, { subSec: 60, filter: 'none' as Filter, moon: 0, seeing: 0 }))
+  // "Half up" used to be stored as 0.6
+  const [cond, setCond] = useState(() => { const c = load(COND_KEY, { subSec: 60, filter: 'none' as Filter, moon: 0, seeing: 0 }); return c.moon === 0.6 ? { ...c, moon: 0.5 } : c })
   const patchCond = (p: Partial<typeof cond>) => { const next = { ...cond, ...p }; setCond(next); put(COND_KEY, next) }
   // seeing follows the site's typical value unless picked here (0 = follow the site)
   const seeing = cond.seeing || (loc.seeing ?? 3)
@@ -147,7 +148,7 @@ export default function GearPlanner({ store, catalog, scope }: { store: Store; c
               <option value="">Bortle {DEFAULT_BORTLE} (assumed)</option>{[1, 2, 3, 4, 5, 6, 7, 8, 9].map((b) => <option key={b} value={b}>Bortle {b} · {SKY_MAG[b]} mag/″²</option>)}</select></label>
           <label className="f"><span>Moon</span>
             <select value={cond.moon} onChange={(e) => patchCond({ moon: +e.target.value })}>
-              <option value={0}>Down / new</option><option value={0.3}>Crescent up</option><option value={0.6}>Half up</option><option value={1}>Full up</option></select></label>
+              <option value={0}>Down / new</option><option value={0.3}>Crescent up</option><option value={0.5}>Half up</option><option value={0.85}>Gibbous up</option><option value={1}>Full up</option></select></label>
           <label className="f"><span>Sub length · filter</span>
             <span className="row gbd">
               <select value={cond.subSec} onChange={(e) => patchCond({ subSec: +e.target.value })}>{[10, 20, 30, 60, 120, 180, 300, 600].map((t) => <option key={t} value={t}>{t < 60 ? `${t} s` : `${t / 60} min`}</option>)}</select>
